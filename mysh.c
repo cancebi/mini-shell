@@ -30,17 +30,9 @@ void run_shell() {
         // Parse the command line into individual commands
         ParsedCommand *commands = parse_input(command_line, &num_commands);
 
-        // Debug: Print parsed commands and their conditions
-        printf("[DEBUG] Parsed commands:\n");
-        for (int i = 0; i < num_commands; i++) {
-            printf("Command %d: '%s', run_if_success: %d\n", i, commands[i].command, commands[i].run_if_success);
-        }
-
         // Execute each parsed command based on conditions
         for (int i = 0; i < num_commands; i++) {
-            // Debug: Print the last status before executing the command
-            printf("[DEBUG] Last status before command %d ('%s'): %d\n", i, commands[i].command, last_status);
-
+            
             // Determine whether to execute the command based on conditions
             if (i == 0 || 
                 (commands[i].run_if_success && last_status == 0) ||  // && condition
@@ -49,8 +41,6 @@ void run_shell() {
                 // Execute the command and update last_status
                 last_status = execute_command(commands[i].command);
 
-                // Debug: Print the last status after executing the command
-                printf("[DEBUG] Last status after command %d ('%s'): %d\n", i, commands[i].command, last_status);
             }
         }
 
