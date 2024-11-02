@@ -32,17 +32,23 @@ void run_shell() {
 
         // Execute each parsed command based on conditions
         for (int i = 0; i < num_commands; i++) {
-            
-            // Determine whether to execute the command based on conditions
-            if (i == 0 || 
-                (commands[i].run_if_success && last_status == 0) ||  // && condition
-                (!commands[i].run_if_success && last_status != 0)) { // || condition
+            printf("[DEBUG] Last status before command %d ('%s'): %d\n", i, commands[i].command, last_status);
 
-                // Execute the command and update last_status
+            // Determine whether to execute the command based on last_status and the run_if_success flag
+            if (i == 0 || 
+                (commands[i].run_if_success && last_status == 0) ||  // Execute on success for &&
+                (!commands[i].run_if_success && last_status != 0)) { // Execute on failure for ||
+
+                    // Execute the command and update last_status
                 last_status = execute_command(commands[i].command);
 
+                printf("[DEBUG] Last status after command %d ('%s'): %d\n", i, commands[i].command, last_status);
+            } else {
+                // If the command is skipped, print a debug message
+                printf("[DEBUG] Skipping command %d ('%s') based on last status: %d\n", i, commands[i].command, last_status);
             }
         }
+
 
         // Free memory for commands
         for (int i = 0; i < num_commands; i++) {

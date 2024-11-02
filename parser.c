@@ -31,29 +31,29 @@ ParsedCommand *parse_input(char *input, int *num_commands) {
     while (*input != '\0') {
         ParsedCommand cmd;
 
-        // Default to sequential execution (similar to `;`)
+        // Default to sequential execution
         cmd.run_if_success = true;
 
-        // Check for `&&` or `||`
+        // Check for `&&`, `||`, or `;`
         if ((sep = strstr(input, "&&")) != NULL) {
-            *sep = '\0'; // Null-terminate the command
-            cmd.run_if_success = true;
+            *sep = '\0';
+            cmd.run_if_success = true;  // `&&` runs on success
             token = input;
-            input = sep + 2; // Move past `&&`
+            input = sep + 2;
         } else if ((sep = strstr(input, "||")) != NULL) {
-            *sep = '\0'; // Null-terminate the command
-            cmd.run_if_success = false;
+            *sep = '\0';
+            cmd.run_if_success = false; // `||` runs on failure
             token = input;
-            input = sep + 2; // Move past `||`
+            input = sep + 2;
         } else if ((sep = strchr(input, ';')) != NULL) {
-            *sep = '\0'; // Null-terminate the command
-            cmd.run_if_success = true; // `;` means run unconditionally
+            *sep = '\0';
+            cmd.run_if_success = true; // `;` runs unconditionally
             token = input;
-            input = sep + 1; // Move past `;`
+            input = sep + 1;
         } else {
             // Last command without any separator
             token = input;
-            input += strlen(input); // Move to end of string to exit loop
+            input += strlen(input);
         }
 
         // Trim whitespace and set the command

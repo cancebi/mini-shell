@@ -15,9 +15,9 @@ int execute_command(char *command) {
         int i = 0;
 
         // Split the command into tokens
-        char *token = strtok(command, " ");
+        char *token = strtok(command, " "); // Splitting by space
         while (token != NULL && i < 99) {
-            args[i++] = token;
+            args[i++] = token; // Populate args array
             token = strtok(NULL, " ");
         }
         args[i] = NULL;  // Null-terminate the args array
@@ -28,12 +28,16 @@ int execute_command(char *command) {
         }
     } else if (pid > 0) {
         // Parent process: wait for the child to complete
-        waitpid(pid, &status, 0);
+        if (waitpid(pid, &status, 0) == -1) {
+            perror("waitpid failed");
+            return 127;  // Indicate failure to execute
+        }
         if (WIFEXITED(status)) {
             return WEXITSTATUS(status);  // Return the child's exit status
         }
+        return 127;  // Non-zero if child didn't terminate normally
     } else {
         perror("fork failed");
     }
-    return 127;  // Non-zero exit status if fork fails
+    return 127;  // Return non-zero if fork fails
 }
