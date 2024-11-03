@@ -40,6 +40,10 @@ void run_shell() {
                 should_run = (last_status == 0);
             }
 
+            if(commands[i].condition == COND_ALWAYS){
+                should_run = true;
+            }
+
             // Execute the command if determined to run
             if (should_run) {
                 last_status = execute_command(commands[i].command);
