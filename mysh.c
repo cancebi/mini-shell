@@ -2,11 +2,31 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <signal.h>
 #include "executor.h"
 #include "parser.h"
 
 #define MAX_COMMAND_LENGTH 100
 #define MAX_PATH_LENGTH 1024
+
+volatile sig_atomic_t foreground_running = 0;
+
+void handle_sigint(int sig){
+    if (foreground_running){
+        printf("\n[DEBUG] SIGINT received, passing to foreground process.\n");
+        return;
+    }
+    printf("\nDo you want to quit mysh? (y/n): ");
+    int response = getchar();
+    getchar();
+    if(response == 'y' || response == 'Y'){
+        printf("Exiting mysh. \n");
+        exit(0);
+    }
+    else{
+        printf("Continuing mysh. \n");
+    }
+}
 
 int change_directory(char *path) {
     // If `path` is NULL or "~", set it to the home directory
@@ -28,6 +48,8 @@ void run_shell() {
     int last_status = 0;
     char current_directory[MAX_PATH_LENGTH];
 
+    signal(SIGINT, handle_sigint);
+
     while (1) {
         if(getcwd(current_directory, sizeof(current_directory)) == NULL){
             perror("getcwd failed");
@@ -48,7 +70,8 @@ void run_shell() {
         }
 
         if (strcmp(command_line, "exit") == 0) {
-            break;
+            printf("Exiting mysh. \n");
+            exit(0);
         }
 
         ParsedCommand *commands = parse_input(command_line, &num_commands);
