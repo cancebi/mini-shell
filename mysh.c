@@ -37,12 +37,15 @@ void run_shell() {
             } 
             // For subsequent commands, check the previous command's status
             else if (commands[i - 1].condition == COND_SUCCESS) {
-                should_run = (last_status == 0);
+                should_run = (last_status == 0); // for &&
             }
-
-            if(commands[i].condition == COND_ALWAYS){
+            else if (commands[i - 1].condition == COND_FAILURE){
+                should_run = (last_status != 0); //for ||
+            }
+            else{
                 should_run = true;
             }
+
 
             // Execute the command if determined to run
             if (should_run) {
