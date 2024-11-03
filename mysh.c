@@ -1,4 +1,3 @@
-// mysh.c
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,38 +18,35 @@ void run_shell() {
             continue;
         }
 
-        // Remove newline character
-        command_line[strcspn(command_line, "\n")] = '\0';
+        command_line[strcspn(command_line, "\n")] = 0; // Remove newline character
 
-        // If the user types "exit", break out of the loop
         if (strcmp(command_line, "exit") == 0) {
             break;
         }
 
-        // Parse the command line into individual commands
         ParsedCommand *commands = parse_input(command_line, &num_commands);
 
-        // Execute each parsed command based on conditions
         for (int i = 0; i < num_commands; i++) {
-            printf("[DEBUG] Last status before command %d ('%s'): %d\n", i, commands[i].command, last_status);
 
-            // Determine whether to execute the command based on last_status and the run_if_success flag
-            if (i == 0 || 
-                (commands[i].run_if_success && last_status == 0) ||  // Execute on success for &&
-                (!commands[i].run_if_success && last_status != 0)) { // Execute on failure for ||
+            // Determine if the command should run
+            bool should_run = false;
 
-                    // Execute the command and update last_status
-                last_status = execute_command(commands[i].command);
-
-                printf("[DEBUG] Last status after command %d ('%s'): %d\n", i, commands[i].command, last_status);
-            } else {
-                // If the command is skipped, print a debug message
-                printf("[DEBUG] Skipping command %d ('%s') based on last status: %d\n", i, commands[i].command, last_status);
+            // For the first command, always run it
+            if (i == 0) {
+                should_run = true;
+            } 
+            // For subsequent commands, check the previous command's status
+            else if (commands[i - 1].condition == COND_SUCCESS) {
+                should_run = (last_status == 0);
             }
+
+            // Execute the command if determined to run
+            if (should_run) {
+                last_status = execute_command(commands[i].command);
+            } 
         }
 
-
-        // Free memory for commands
+        // Free allocated memory for commands
         for (int i = 0; i < num_commands; i++) {
             free(commands[i].command);
         }

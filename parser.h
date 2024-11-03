@@ -4,14 +4,17 @@
 
 #include <stdbool.h>
 
-// Structure to hold a parsed command and its condition
+typedef enum {
+    COND_SUCCESS,  // Corresponds to &&
+    COND_FAILURE,  // Corresponds to ||
+    COND_ALWAYS    // Corresponds to ;
+} ConditionType;
+
 typedef struct {
     char *command;
-    bool run_if_success;  // `true` if &&, `false` if ||
+    ConditionType condition;
 } ParsedCommand;
 
-// Function to parse the input line into commands based on `;`, `&&`, `||`
 ParsedCommand *parse_input(char *input, int *num_commands);
-
 void trim_whitespace(char *str);
-#endif // PARSER_H
+#endif
