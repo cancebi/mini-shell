@@ -10,6 +10,8 @@
 #define MAX_PATH_LENGTH 1024
 
 volatile sig_atomic_t foreground_running = 0;
+char last_command_name[MAX_COMMAND_LENGTH] = "";
+int last_status = -1;
 
 void handle_sigint(int sig){
     if (foreground_running){
@@ -29,7 +31,6 @@ void handle_sigint(int sig){
 }
 
 int change_directory(char *path) {
-    // If `path` is NULL or "~", set it to the home directory
     if (path == NULL || strcmp(path, "~") == 0) {
         path = getenv("HOME");  // Default to home directory
     }
@@ -42,10 +43,24 @@ int change_directory(char *path) {
     return 0;  // Zero status for success
 }
 
+void print_status() {
+    if (last_status == -1) {
+        printf("No commands have been executed yet.\n");
+    } else {
+        if (last_status == 0) {
+            printf("%s terminé avec comme code de retour %d\n", last_command_name, last_status);
+        } else {
+            printf("%s terminé anormalement\n", last_command_name);
+        }
+    }
+    // Update to reflect that `status` was the last executed command
+    strcpy(last_command_name, "status");
+    last_status = 0;
+}
+
 void run_shell() {
     char command_line[MAX_COMMAND_LENGTH];
     int num_commands;
-    int last_status = 0;
     char current_directory[MAX_PATH_LENGTH];
 
     signal(SIGINT, handle_sigint);
@@ -65,7 +80,8 @@ void run_shell() {
 
         if(strncmp(command_line, "cd", 2) == 0 ){
             char *directory = strtok(command_line + 3, " ");
-            change_directory(directory);
+            last_status = change_directory(directory);
+            strncpy(last_command_name, "cd", MAX_COMMAND_LENGTH);
             continue;
         }
 
@@ -74,33 +90,25 @@ void run_shell() {
             exit(0);
         }
 
+        if (strcmp(command_line, "status") == 0) {
+            print_status();
+            continue;
+        }
+
         ParsedCommand *commands = parse_input(command_line, &num_commands);
 
         for (int i = 0; i < num_commands; i++) {
+            bool should_run = (i == 0) ||
+                              (commands[i - 1].condition == COND_SUCCESS && last_status == 0) ||
+                              (commands[i - 1].condition == COND_FAILURE && last_status != 0) ||
+                              (commands[i - 1].condition == COND_ALWAYS);
 
-            // Determine if the command should run
-            bool should_run = false;
-
-            // For the first command, always run it
-            if (i == 0) {
-                should_run = true;
-            } 
-            // For subsequent commands, check the previous command's status
-            else if (commands[i - 1].condition == COND_SUCCESS) {
-                should_run = (last_status == 0); // for &&
-            }
-            else if (commands[i - 1].condition == COND_FAILURE){
-                should_run = (last_status != 0); //for ||
-            }
-            else{
-                should_run = true;
-            }
-
-
-            // Execute the command if determined to run
             if (should_run) {
-                last_status = execute_command(commands[i].command);
-            } 
+                foreground_running = 1;
+                strncpy(last_command_name, commands[i].command, MAX_COMMAND_LENGTH);  // Store the command name
+                last_status = execute_command(commands[i].command);  // Execute command and update status
+                foreground_running = 0;
+            }
         }
 
         // Free allocated memory for commands
