@@ -1,4 +1,5 @@
 #include "executor.h"
+#include "wildcard.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -17,7 +18,18 @@ int execute_command(char *command) {
         // Split the command into tokens
         char *token = strtok(command, " "); // Splitting by space
         while (token != NULL && i < 99) {
-            args[i++] = token; // Populate args array
+            if (strchr(token, '*') != NULL) {
+                int num_matches = 0;
+                char **matches = expand_star_wildcard(token, &num_matches);
+                if (matches) {
+                    for (int j = 0; j < num_matches && i < 99; j++) {
+                        args[i++] = matches[j];
+                    }
+                    free(matches);
+                }
+            } else {
+                args[i++] = token;
+            }
             token = strtok(NULL, " ");
         }
         args[i] = NULL;  // Null-terminate the args array

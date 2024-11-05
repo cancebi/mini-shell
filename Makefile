@@ -4,7 +4,7 @@ CC = gcc
 CFLAGS = -Wall -g
 
 # Source and object files
-SRC = mysh.c executor.c parser.c
+SRC = mysh.c executor.c parser.c wildcard.c
 OBJ = $(SRC:.c=.o)
 
 # Output executable
