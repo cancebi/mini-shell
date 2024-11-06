@@ -5,7 +5,7 @@
 #include <string.h>
 #include <fnmatch.h>
 
-char **expand_star_wildcard(const char *pattern, int *num_matches) {
+char **expand_wildcard(const char *pattern, int *num_matches) {
     DIR *dir = opendir(".");
     if (!dir) {
         perror("opendir failed");
@@ -17,7 +17,7 @@ char **expand_star_wildcard(const char *pattern, int *num_matches) {
 
     struct dirent *entry;
     while ((entry = readdir(dir)) != NULL) {
-        if (fnmatch(pattern, entry->d_name, 0) == 0) {
+        if (fnmatch(pattern, entry->d_name, FNM_PERIOD) == 0) {
             matches[*num_matches] = strdup(entry->d_name);
             (*num_matches)++;
         }
