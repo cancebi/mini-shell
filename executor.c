@@ -18,9 +18,21 @@ int execute_command(char *command) {
         // Split the command into tokens
         char *token = strtok(command, " "); // Splitting by space
         while (token != NULL && i < 99) {
-            if (strpbrk(token, "*?") != NULL) {
+            int has_wildcard = (strchr(token, '*') != NULL || strchr(token, '?') != NULL || strchr(token, '[') != NULL);
+            int is_escaped_token = 0;
+
+            // Check if the token has any backslash
+            for (int j = 0; token[j] != '\0'; j++) {
+                if (is_escaped(token, j)) {
+                    is_escaped_token = 1;
+                    break;
+                }
+            }
+
+            // If the token has a wildcard and is not escaped, expand it
+            if (has_wildcard && !is_escaped_token) {
                 int num_matches = 0;
-                char **matches = expand_wildcard(token, &num_matches);
+                char **matches = expand_wildcard(token, &num_matches); // Use expand_wildcard for *, ?, [
                 if (matches) {
                     for (int j = 0; j < num_matches && i < 99; j++) {
                         args[i++] = matches[j];

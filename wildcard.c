@@ -4,6 +4,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <fnmatch.h>
+#include <stdbool.h>
+
+bool is_escaped(const char *pattern, int index){
+    return (index > 0 && pattern[index - 1] == '\\');
+}
 
 char **expand_wildcard(const char *pattern, int *num_matches) {
     DIR *dir = opendir(".");
@@ -17,7 +22,19 @@ char **expand_wildcard(const char *pattern, int *num_matches) {
 
     struct dirent *entry;
     while ((entry = readdir(dir)) != NULL) {
-        if (fnmatch(pattern, entry->d_name, FNM_PERIOD) == 0) {
+        bool match = true;
+        for (int i = 0; pattern[i] != '\0'; i++) {
+            if ((pattern[i] == '*' || pattern[i] == '?' || pattern[i] == '[') && is_escaped(pattern, i)) {
+                if (strncmp(entry->d_name, pattern, strlen(pattern)) != 0) {
+                    match = false;
+                    break;
+                }
+            } else {
+                match = (fnmatch(pattern, entry->d_name, 0) == 0);
+            }
+        }
+        
+        if (match) {
             matches[*num_matches] = strdup(entry->d_name);
             (*num_matches)++;
         }
