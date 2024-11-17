@@ -1,5 +1,6 @@
 #include "executor.h"
 #include "wildcard.h"
+#include "myls.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -46,9 +47,15 @@ int execute_command(char *command) {
         }
         args[i] = NULL;  // Null-terminate the args array
 
-        if (execvp(args[0], args) == -1) {
-            perror("execvp failed");
-            exit(127);  // Non-zero exit status for failure
+        if (strcmp(args[0], "myls") == 0) {
+            myls_run(i, args);
+            exit(0);
+        }
+        else{
+            if (execvp(args[0], args) == -1) {
+                perror("execvp failed");
+                exit(127);  // Non-zero exit status for failure
+            }
         }
     } else if (pid > 0) {
         // Parent process: wait for the child to complete
