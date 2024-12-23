@@ -7,6 +7,9 @@
 #include "executor.h"
 #include "parser.h"
 
+#define ROUGE(x) "\033[31m" x "\033[0m"
+#define VERT(x) "\033[32m" x "\033[0m"
+
 #define MAX_COMMAND_LENGTH 100
 #define MAX_PATH_LENGTH 1024
 
@@ -58,9 +61,9 @@ void print_status() {
         printf("No commands have been executed yet.\n");
     } else {
         if (last_status == 0) {
-            printf("%s terminé avec comme code de retour %d\n", last_command_name, last_status);
+            printf(VERT("%s terminé avec comme code de retour %d\n"), last_command_name, last_status);
         } else {
-            printf("%s terminé anormalement\n", last_command_name);
+            printf(ROUGE("%s terminé anormalement\n"), last_command_name);
         }
     }
     strcpy(last_command_name, "status");
@@ -77,7 +80,7 @@ void run_shell() {
             perror("getcwd failed");
             strcpy(current_directory, "?"); 
         }
-        printf("mysh:%s> ", current_directory);
+        printf("mysh:%s ~> ", current_directory);
         fflush(stdout);
 
         ssize_t n = read(STDIN_FILENO, global_command_line, MAX_COMMAND_LENGTH - 1);
