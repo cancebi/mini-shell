@@ -7,6 +7,7 @@
 #include "executor.h"
 #include "parser.h"
 
+
 #define ROUGE(x) "\033[31m" x "\033[0m"
 #define VERT(x) "\033[32m" x "\033[0m"
 
@@ -65,7 +66,7 @@ void print_status() {
         } else {
             printf(ROUGE("%s terminé anormalement\n"), last_command_name);
         }
-    }
+    } 
     strcpy(last_command_name, "status");
     last_status = 0;
 }

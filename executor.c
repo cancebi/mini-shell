@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <string.h>
+#include "myps.h"
 
 int execute_command(char *command) {
     pid_t pid = fork();
@@ -50,8 +51,10 @@ int execute_command(char *command) {
         if (strcmp(args[0], "myls") == 0) {
             myls_run(i, args);
             exit(0);
-        }
-        else{
+        } else if (strcmp(args[0], "myps") == 0) {
+            myps(); // Appeler la fonction myps
+            exit(0);
+        } else{
             if (execvp(args[0], args) == -1) {
                 perror("execvp failed");
                 exit(127);  // Non-zero exit status for failure
