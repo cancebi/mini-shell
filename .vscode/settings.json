@@ -1,0 +1,9 @@
+{
+  "files.associations": {
+    "*.embeddedhtml": "html",
+    "error_handler.h": "c",
+    "myps.h": "c",
+    "variable.h": "c",
+    "xattr.h": "c"
+  }
+}
