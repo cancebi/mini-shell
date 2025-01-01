@@ -1,11 +1,11 @@
-#include "executor.h"
-#include "redirection.h"
-#include "wildcard.h"
-#include "myls.h"
-#include "myps.h"
-#include "parser.h"
-#include "process_manager.h"
-#include "variable.h"
+#include "../include/executor.h"
+#include "../include/redirection.h"
+#include "../include/wildcard.h"
+#include "../include/myls.h"
+#include "../include/myps.h"
+#include "../include/parser.h"
+#include "../include/process_manager.h"
+#include "../include/variable.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -16,7 +16,7 @@ int background = 0;
 
 int execute_command(char *command) {
 
-    substitute_variables(command); // Substituer les variables
+    //substitute_variables(command); // Substituer les variables
 
     // Vérifier la présence d'un pipeline
     if (strchr(command, '|')) {
@@ -86,12 +86,7 @@ int execute_command(char *command) {
         } else if (strcmp(args[0], "myps") == 0) {
             myps();
             exit(0);
-        } if (strncmp(command, "echo ", 5) == 0) {
-            char *args = command + 5;
-            substitute_variables(args); // Traiter les variables si elles existent
-            printf("%s\n", args);
-            return 0; // Succès
-        } else {
+        }else {
             // Exécuter la commande avec execvp
             if (execvp(args[0], args) == -1) {
                 fprintf(stderr, "Command not found: %s\n", args[0]);

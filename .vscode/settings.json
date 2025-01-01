@@ -4,6 +4,12 @@
     "error_handler.h": "c",
     "myps.h": "c",
     "variable.h": "c",
-    "xattr.h": "c"
+    "xattr.h": "c",
+    "executor.h": "c",
+    "fcntl.h": "c",
+    "stdio.h": "c",
+    "wildcard.h": "c",
+    "process_manager.h": "c",
+    "string.h": "c"
   }
 }

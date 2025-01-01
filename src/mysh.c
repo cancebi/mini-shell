@@ -4,9 +4,9 @@
 #include <unistd.h>
 #include <signal.h>
 #include <sys/wait.h>
-#include "executor.h"
-#include "parser.h"
-#include "variable.h"
+#include "../include/executor.h"
+#include "../include/parser.h"
+#include "../include/variable.h"
 
 
 #define ROUGE(x) "\033[31m" x "\033[0m"
@@ -173,7 +173,7 @@ void run_shell() {
 
 
 
-       if (strncmp(global_command_line, "unsetenv ", 9) == 0) {
+        if (strncmp(global_command_line, "unsetenv ", 9) == 0) {
             char *name = global_command_line + 9;
             // Ne pas interpréter $ comme une substitution dans unsetenv
             if (name[0] == '$') {
@@ -183,6 +183,13 @@ void run_shell() {
             continue;
         }
         
+        
+        if (strncmp(global_command_line, "echo ", 5) == 0) {
+            char *args = global_command_line + 5;
+            substitute_variables(args); // Traiter les variables si elles existent
+            printf("%s\n", args);
+            continue;
+        } 
 
         ParsedCommand *commands = parse_input(global_command_line, &num_commands);
 

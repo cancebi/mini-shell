@@ -4,7 +4,7 @@ CC = gcc
 CFLAGS = -Wall -g
 
 # Source and object files
-SRC = mysh.c executor.c parser.c wildcard.c myls.c myps.c redirection.c process_manager.c variable.c
+SRC = src/mysh.c src/executor.c src/parser.c src/wildcard.c src/myls.c src/myps.c src/redirection.c src/process_manager.c src/variable.c
 OBJ = $(SRC:.c=.o)
 
 # Output executable

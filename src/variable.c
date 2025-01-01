@@ -1,4 +1,4 @@
-#include "variable.h"
+#include "../include/variable.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
