@@ -6,6 +6,7 @@
 #include <sys/wait.h>
 #include "executor.h"
 #include "parser.h"
+#include "variable.h"
 
 
 #define ROUGE(x) "\033[31m" x "\033[0m"
@@ -40,7 +41,7 @@ void handle_sigint(int sig){
             perror("getcwd failed");
             strcpy(current_directory, "?");
         }
-        printf("mysh:%s> ", current_directory);
+        printf("mysh:%s ~> ", current_directory);
         fflush(stdout);
     }
 }
@@ -119,6 +120,70 @@ void run_shell() {
             continue;
         }
 
+        if (strncmp(global_command_line, "myjobs", 6) == 0) {
+            execute_myjobs();
+            continue;
+        }
+        
+        if (strncmp(global_command_line, "myfg", 4) == 0) {
+            int job_id = atoi(global_command_line + 5);
+            execute_myfg(job_id);
+            continue;
+        }
+        
+        if (strncmp(global_command_line, "mybg", 4) == 0) {
+            int job_id = atoi(global_command_line + 5);
+            execute_mybg(job_id);
+            continue;
+        }
+
+        if (strncmp(global_command_line, "set ", 4) == 0) {
+            char *name = strtok(global_command_line + 4, "=");
+            char *value = strtok(NULL, "");
+            if (name && value) {
+                set_local_variable(name, value);
+            } else {
+                fprintf(stderr, "Usage: set name=value\n");
+            }
+            continue;
+        }
+
+        if (strncmp(global_command_line, "setenv ", 7) == 0) {
+            char *name = strtok(global_command_line + 7, "=");
+            char *value = strtok(NULL, "");
+            if (name && value) {
+                set_env_variable(name, value);
+            } else {
+                fprintf(stderr, "Usage: setenv name=value\n");
+            }
+            continue;
+        }
+
+
+
+        if (strncmp(global_command_line, "unset ", 6) == 0) {
+            char *name = global_command_line + 6;
+            // Ne pas interpréter $ comme une substitution dans unset
+            if (name[0] == '$') {
+                name++; // Ignorer le symbole $ pour obtenir le nom réel de la variable
+            }
+            unset_local_variable(name);
+            continue;
+        }
+
+
+
+       if (strncmp(global_command_line, "unsetenv ", 9) == 0) {
+            char *name = global_command_line + 9;
+            // Ne pas interpréter $ comme une substitution dans unsetenv
+            if (name[0] == '$') {
+                name++; // Ignorer le symbole $ pour obtenir le nom réel de la variable
+            }
+            unset_env_variable(name);
+            continue;
+        }
+        
+
         ParsedCommand *commands = parse_input(global_command_line, &num_commands);
 
         for (int i = 0; i < num_commands; i++) {
@@ -143,6 +208,13 @@ void run_shell() {
 }
 
 int main() {
+     // Initialiser la mémoire partagée pour les variables d'environnement
+    init_shared_memory();
+
+    // Lancer le shell
     run_shell();
+
+    // Libérer la mémoire partagée à la fin
+    destroy_shared_memory();
     return 0;
 }

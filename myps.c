@@ -1,115 +1,140 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <libproc.h>
-#include <pwd.h>
-#include <time.h>
-#include <sys/sysctl.h>
+#include <string.h>
 #include <unistd.h>
-#include <sys/proc_info.h>
+#include <dirent.h>
+#include <sys/sysinfo.h>
+#include <pwd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <ctype.h>
 
-#define RED "\033[31m"
-#define GREEN "\033[32m"
-#define YELLOW "\033[33m"
-#define RESET "\033[0m"
+#define MAX_PATH 512
+#define MAX_CMD 256
 
-// Fonction pour retourner la couleur en fonction de l'état du processus
-const char* get_color(char state) {
-    switch (state) {
-        case 'R': return GREEN;  // Running
-        case 'S': return YELLOW; // Sleeping
-        case 'T': return RED;    // Stopped
-        case 'Z': return RED;    // Zombie
-        default: return RESET;   // Default
-    }
-}
-
-// Fonction pour récupérer le statut du processus
-char get_process_status(struct proc_bsdinfo *proc_info) {
-    if (proc_info->pbi_flags & P_LTRACED) return 'T'; // Traced or stopped
-    if (proc_info->pbi_flags & P_WEXIT) return 'Z';   // Zombie
-    if (proc_info->pbi_flags & P_WAITED) return 'S';  // Sleeping
-    if (proc_info->pbi_flags & P_SINTR) return 'I';   // Idle
-    return 'R'; // Running (default)
-}
-
-// Fonction pour récupérer le nom d'utilisateur
-const char* get_username(uid_t uid) {
+// Fonction pour obtenir le nom d'utilisateur à partir de l'UID
+const char *get_username(uid_t uid) {
     struct passwd *pw = getpwuid(uid);
     return pw ? pw->pw_name : "unknown";
 }
 
-// Fonction pour formater le temps CPU
-void format_time(uint64_t microseconds, char *buffer, size_t buffer_size) {
-    uint64_t seconds = microseconds / 1000000;
-    int hrs = seconds / 3600;
-    int mins = (seconds % 3600) / 60;
-    int secs = seconds % 60;
-    snprintf(buffer, buffer_size, "%02d:%02d:%02d", hrs, mins, secs);
+// Fonction pour calculer l'utilisation CPU (approximation)
+float calculate_cpu(unsigned long utime, unsigned long stime, unsigned long start_time, long uptime, long clk_tck) {
+    unsigned long total_time = utime + stime;
+    float seconds = uptime - (start_time / clk_tck);
+    return (seconds > 0) ? 100.0 * ((float)total_time / clk_tck) / seconds : 0.0;
 }
 
-// Fonction principale pour afficher les processus
-void myps() {
-    int buffer_size = 1024;
-    pid_t *pids = malloc(buffer_size * sizeof(pid_t));
-    int num_pids = proc_listpids(PROC_ALL_PIDS, 0, pids, buffer_size * sizeof(pid_t)) / sizeof(pid_t);
+// Fonction pour calculer l'utilisation mémoire (en pourcentage)
+float calculate_mem(unsigned long rss, unsigned long totalram) {
+    return (totalram > 0) ? 100.0 * ((float)rss / totalram) : 0.0;
+}
 
-    if (num_pids < 1) {
-        perror("proc_listpids failed");
-        free(pids);
+// Fonction pour obtenir le terminal associé au processus
+const char *get_tty(const char *proc_path) {
+    static char tty[16] = "?";
+    char fd_path[MAX_PATH];
+    snprintf(fd_path, sizeof(fd_path), "%s/fd/0", proc_path);
+
+    char link_path[MAX_PATH];
+    ssize_t len = readlink(fd_path, link_path, sizeof(link_path) - 1);
+    if (len > 0) {
+        link_path[len] = '\0';
+        if (strstr(link_path, "/dev/pts")) {
+            snprintf(tty, sizeof(tty), "%s", strrchr(link_path, '/') + 1);
+        } else if (strstr(link_path, "/dev/tty")) {
+            snprintf(tty, sizeof(tty), "%s", strrchr(link_path, '/') + 1);
+        }
+    }
+    return tty;
+}
+
+// Fonction pour récupérer les informations d'un processus
+void get_process_info(const char *pid, const char *proc_path, struct sysinfo *sys_info) {
+    char stat_path[MAX_PATH], status_path[MAX_PATH], cmdline_path[MAX_PATH];
+    snprintf(stat_path, MAX_PATH, "%s/stat", proc_path);
+    snprintf(status_path, MAX_PATH, "%s/status", proc_path);
+    snprintf(cmdline_path, MAX_PATH, "%s/cmdline", proc_path);
+
+    FILE *stat_file = fopen(stat_path, "r");
+    FILE *status_file = fopen(status_path, "r");
+    FILE *cmdline_file = fopen(cmdline_path, "r");
+
+    if (!stat_file || !status_file) {
+        if (stat_file) fclose(stat_file);
+        if (status_file) fclose(status_file);
         return;
     }
 
-    printf("USER       PID  %%CPU %%MEM      VSZ    RSS   STAT STARTED      TIME     COMMAND\n");
+    char comm[256], state;
+    unsigned long utime, stime, vsize, rss, start_time;
+    uid_t uid = -1;
+    char cmdline[MAX_CMD] = "[unknown]";
 
-    for (int i = 0; i < num_pids; i++) {
-        if (pids[i] == 0) {
+    fscanf(stat_file, "%*d %s %c %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u %lu %lu %*d %*d %*d %*d %lu %lu %lu",
+           comm, &state, &utime, &stime, &vsize, &rss, &start_time);
+    fclose(stat_file);
+
+    char line[256];
+    while (fgets(line, sizeof(line), status_file)) {
+        if (strncmp(line, "Uid:", 4) == 0) {
+            sscanf(line, "Uid: %u", &uid);
+            break;
+        }
+    }
+    fclose(status_file);
+
+    if (cmdline_file) {
+        size_t len = fread(cmdline, 1, sizeof(cmdline) - 1, cmdline_file);
+        if (len == 0) {
+            strncpy(cmdline, "[kernel thread]", sizeof(cmdline) - 1);
+        }
+        cmdline[len] = '\0';
+        fclose(cmdline_file);
+    } else {
+        strncpy(cmdline, "[unreadable]", sizeof(cmdline) - 1);
+    }
+
+    unsigned long vsize_kb = vsize / 1024;
+    unsigned long rss_kb = rss * sysconf(_SC_PAGESIZE) / 1024;
+
+    char tty[16];
+    snprintf(tty, sizeof(tty), "%s", get_tty(proc_path));
+    float cpu_usage = calculate_cpu(utime, stime, start_time, sys_info->uptime, sysconf(_SC_CLK_TCK));
+    float mem_usage = calculate_mem(rss * sysconf(_SC_PAGESIZE), sys_info->totalram);
+
+    printf("%-10s %5s %5.1f %5.1f %8lu %7lu %-6s %c %s\n",
+           get_username(uid), pid, cpu_usage, mem_usage, vsize_kb, rss_kb, tty, state, cmdline);
+}
+
+// Fonction principale pour lister les processus
+void myps() {
+    DIR *proc_dir = opendir("/proc");
+    if (!proc_dir) {
+        perror("opendir");
+        return;
+    }
+
+    struct dirent *entry;
+    struct sysinfo sys_info;
+    sysinfo(&sys_info);
+
+    printf("USER       PID  %%CPU %%MEM      VSZ    RSS   TTY   STAT COMMAND\n");
+
+    while ((entry = readdir(proc_dir)) != NULL) {
+        if (!isdigit(entry->d_name[0])) {
             continue;
         }
 
-        struct proc_bsdinfo proc_info;
-        struct proc_taskinfo task_info;
-        char path_buffer[PROC_PIDPATHINFO_MAXSIZE] = "Unknown";
-
-        if (proc_pidinfo(pids[i], PROC_PIDTBSDINFO, 0, &proc_info, sizeof(proc_info)) > 0 &&
-            proc_pidinfo(pids[i], PROC_PIDTASKINFO, 0, &task_info, sizeof(task_info)) > 0) {
-
-            // Filtrer les processus qui ne sont pas de l'utilisateur actuel
-            if (proc_info.pbi_uid != getuid()) {
-                continue;
-            }
-
-            // Récupérer le chemin complet du binaire
-            if (proc_pidpath(pids[i], path_buffer, sizeof(path_buffer)) == 0) {
-                snprintf(path_buffer, sizeof(path_buffer), "Unknown");
-            }
-
-            // Calculer l'état du processus
-            char stat = get_process_status(&proc_info);
-
-            // Récupérer l'heure de démarrage
-            time_t start_time = proc_info.pbi_start_tvsec;
-            struct tm *tm_info = localtime(&start_time);
-            char time_buffer[16];
-            strftime(time_buffer, sizeof(time_buffer), "%H:%M", tm_info);
-
-            // Formater le temps CPU
-            char cpu_time[16];
-            format_time(task_info.pti_total_user, cpu_time, sizeof(cpu_time));
-
-            printf("%-10s %5d  %.1f  %.1f %8llu %8llu  %c    %s  %s  %s\n",
-                   get_username(proc_info.pbi_uid),                  // USER
-                   pids[i],                                         // PID
-                   task_info.pti_total_user / 1000000.0,            // %CPU (approximation)
-                   task_info.pti_resident_size / 1024.0 / 1024.0,   // %MEM (approximation)
-                   task_info.pti_virtual_size / 1024,               // VSZ
-                   task_info.pti_resident_size / 1024,              // RSS
-                   stat,                                            // STAT
-                   time_buffer,                                     // STARTED
-                   cpu_time,                                        // TIME
-                   path_buffer                                      // COMMAND
-            );
+        char proc_path[MAX_PATH];
+        int len = snprintf(proc_path, MAX_PATH, "/proc/%s", entry->d_name);
+        if (len >= MAX_PATH) {
+            fprintf(stderr, "Path truncated: %s\n", entry->d_name);
+            continue;
         }
+
+        get_process_info(entry->d_name, proc_path, &sys_info);
     }
 
-    free(pids);
+    closedir(proc_dir);
 }

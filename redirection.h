@@ -3,7 +3,8 @@
 
 #include "bufferReader.h"
 
-void setup_redirection(char *fileName, int redirectionType);
+void handle_redirection(char *command);
+int handle_pipeline(char *command);
 
 #endif // REDIRECTION_H
 

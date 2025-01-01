@@ -59,3 +59,15 @@ ParsedCommand *parse_input(char *input, int *num_commands) {
     
     return commands;
 }
+
+void remove_quotes(char *str) {
+    char *src = str, *dest = str;
+
+    while (*src) {
+        if (*src != '"' && *src != '\'') { // Ignore les guillemets simples et doubles
+            *dest++ = *src;
+        }
+        src++;
+    }
+    *dest = '\0'; // Terminer la chaîne
+}

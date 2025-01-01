@@ -15,6 +15,7 @@ typedef struct {
     ConditionType condition;
 } ParsedCommand;
 
+void remove_quotes(char *str);
 ParsedCommand *parse_input(char *input, int *num_commands);
 void trim_whitespace(char *str);
 #endif

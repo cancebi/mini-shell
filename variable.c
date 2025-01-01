@@ -1,110 +1,215 @@
+#include "variable.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <sys/mman.h>
-#include <fcntl.h>
-#include "variable.h"
+#include <sys/shm.h>
+#include <pthread.h>
 
-#define MAX_VARIABLES 100
-#define SHARED_MEMORY_NAME "/mysh_env"
-#define SHARED_MEMORY_SIZE 4096
-
-// Variables locales
-typedef struct {
-    char *name;
-    char *value;
+// Structures pour les variables locales
+typedef struct LocalVariable {
+    char name[64];
+    char value[256];
+    struct LocalVariable *next;
 } LocalVariable;
 
-LocalVariable local_variables[MAX_VARIABLES];
-int local_var_count = 0;
+LocalVariable *local_vars = NULL;
 
-// Mémoire partagée
+// Structures pour les variables d'environnement
+#define SHM_KEY 12345
+#define SHM_SIZE 4096
 char *shared_memory = NULL;
+int shm_id;
+pthread_mutex_t shm_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-// Variables locales
+// Initialisation de la mémoire partagée
+void init_shared_memory() {
+    shm_id = shmget(SHM_KEY, SHM_SIZE, IPC_CREAT | 0666);
+    if (shm_id < 0) {
+        perror("shmget failed");
+        exit(1);
+    }
+    shared_memory = (char *)shmat(shm_id, NULL, 0);
+    if (shared_memory == (char *)-1) {
+        perror("shmat failed");
+        exit(1);
+    }
+    memset(shared_memory, 0, SHM_SIZE);
+}
+
+// Destruction de la mémoire partagée
+void destroy_shared_memory() {
+    if (shmdt(shared_memory) == -1) {
+        perror("shmdt failed");
+    }
+    if (shmctl(shm_id, IPC_RMID, NULL) == -1) {
+        perror("shmctl failed");
+    }
+}
+
+// Gestion des variables locales
 void set_local_variable(const char *name, const char *value) {
-    for (int i = 0; i < local_var_count; i++) {
-        if (strcmp(local_variables[i].name, name) == 0) {
-            free(local_variables[i].value);
-            local_variables[i].value = strdup(value);
+    if (!name || !value || strlen(name) == 0 || strlen(value) == 0 || strlen(name) >= 64 || strlen(value) >= 256) {
+        fprintf(stderr, "Error: Invalid name or value for local variable.\n");
+        return;
+    }
+
+    LocalVariable *current = local_vars;
+    while (current) {
+        if (strcmp(current->name, name) == 0) {
+            // Mise à jour si la variable existe
+            strncpy(current->value, value, sizeof(current->value) - 1);
+            current->value[sizeof(current->value) - 1] = '\0';
             return;
         }
+        current = current->next;
     }
-    if (local_var_count < MAX_VARIABLES) {
-        local_variables[local_var_count].name = strdup(name);
-        local_variables[local_var_count].value = strdup(value);
-        local_var_count++;
-    } else {
-        fprintf(stderr, "Maximum number of local variables reached\n");
+
+    // Ajouter une nouvelle variable
+    LocalVariable *new_var = malloc(sizeof(LocalVariable));
+    if (!new_var) {
+        perror("malloc failed");
+        return;
     }
+
+    memset(new_var, 0, sizeof(LocalVariable)); // Initialiser la structure
+    strncpy(new_var->name, name, sizeof(new_var->name) - 1);
+    new_var->name[sizeof(new_var->name) - 1] = '\0';
+    strncpy(new_var->value, value, sizeof(new_var->value) - 1);
+    new_var->value[sizeof(new_var->value) - 1] = '\0';
+    new_var->next = local_vars;
+    local_vars = new_var;
 }
 
-const char *get_local_variable(const char *name) {
-    for (int i = 0; i < local_var_count; i++) {
-        if (strcmp(local_variables[i].name, name) == 0) {
-            return local_variables[i].value;
-        }
-    }
-    return NULL;
-}
 
 void unset_local_variable(const char *name) {
-    for (int i = 0; i < local_var_count; i++) {
-        if (strcmp(local_variables[i].name, name) == 0) {
-            free(local_variables[i].name);
-            free(local_variables[i].value);
-            local_variables[i] = local_variables[local_var_count - 1];
-            local_var_count--;
+    if (!name || strlen(name) == 0) {
+        fprintf(stderr, "Error: Invalid name for local variable.\n");
+        return;
+    }
+
+    LocalVariable **current = &local_vars;
+    while (*current) {
+        if (strcmp((*current)->name, name) == 0) {
+            LocalVariable *to_delete = *current;
+            *current = (*current)->next; // Réorganiser la liste
+            free(to_delete); // Libérer la mémoire
             return;
         }
+        current = &((*current)->next);
+    }
+
+    // Si la variable n'est pas trouvée
+    fprintf(stderr, "Error: Variable %s not found.\n", name);
+}
+
+
+
+void list_local_variables() {
+    LocalVariable *current = local_vars;
+    while (current) {
+        printf("%s=%s\n", current->name, current->value);
+        current = current->next;
     }
 }
 
-// Variables d'environnement
+// Gestion des variables d'environnement
 void set_env_variable(const char *name, const char *value) {
-    if (setenv(name, value, 1) != 0) {
-        perror("setenv failed");
+    if (!shared_memory) {
+        fprintf(stderr, "Shared memory not initialized.\n");
+        return;
     }
+
+    if (!name || !value || strlen(name) == 0 || strlen(value) == 0 || strlen(name) >= 64 || strlen(value) >= 256) {
+        fprintf(stderr, "Error: Invalid name or value for environment variable.\n");
+        return;
+    }
+
+    pthread_mutex_lock(&shm_mutex);
+
+    char *current = shared_memory;
+    while (*current && current < shared_memory + SHM_SIZE - 256) {
+        current += strlen(current) + 1;
+    }
+
+    if (current >= shared_memory + SHM_SIZE - 256) {
+        fprintf(stderr, "Shared memory is full.\n");
+        pthread_mutex_unlock(&shm_mutex);
+        return;
+    }
+
+    snprintf(current, 256, "%s=%s", name, value);
+
+    pthread_mutex_unlock(&shm_mutex);
 }
 
-const char *get_env_variable(const char *name) {
-    return getenv(name);
-}
+
+
 
 void unset_env_variable(const char *name) {
-    if (unsetenv(name) != 0) {
-        perror("unsetenv failed");
+    if (!shared_memory) {
+        fprintf(stderr, "Shared memory not initialized.\n");
+        return;
+    }
+
+    if (!name || strlen(name) == 0) {
+        fprintf(stderr, "Error: Invalid name for environment variable.\n");
+        return;
+    }
+
+    pthread_mutex_lock(&shm_mutex);
+
+    char *current = shared_memory;
+    int found = 0;
+    while (*current) {
+        if (strncmp(current, name, strlen(name)) == 0 && current[strlen(name)] == '=') {
+            char *next = current + strlen(current) + 1;
+            memmove(current, next, shared_memory + SHM_SIZE - next);
+            found = 1;
+            break;
+        }
+        current += strlen(current) + 1;
+    }
+
+    pthread_mutex_unlock(&shm_mutex);
+
+    if (!found) {
+        fprintf(stderr, "Error: Environment variable %s not found.\n", name);
     }
 }
 
-// Résolution des variables
-const char *resolve_variable(const char *name) {
-    const char *value = get_local_variable(name);
-    if (value) {
-        return value;
+
+void list_env_variables() {
+    char *current = shared_memory;
+    while (*current) {
+        printf("%s\n", current);
+        current += strlen(current) + 1;
     }
-    return get_env_variable(name);
 }
 
-// Gestion de la mémoire partagée
-void initialize_shared_memory() {
-    int shm_fd = shm_open(SHARED_MEMORY_NAME, O_CREAT | O_RDWR, 0666);
-    ftruncate(shm_fd, SHARED_MEMORY_SIZE);
-    shared_memory = mmap(0, SHARED_MEMORY_SIZE, PROT_WRITE | PROT_READ, MAP_SHARED, shm_fd, 0);
-    if (shared_memory == MAP_FAILED) {
-        perror("mmap failed");
-        exit(EXIT_FAILURE);
+// Récupérer la valeur d'une variable (locale ou environnement)
+char *get_variable_value(const char *name) {
+    if (!name || strlen(name) == 0) {
+        return NULL; // Nom invalide
     }
-    close(shm_fd);
-    memset(shared_memory, 0, SHARED_MEMORY_SIZE); // Initialiser avec des zéros
-}
 
-void cleanup_shared_memory() {
-    if (munmap(shared_memory, SHARED_MEMORY_SIZE) == -1) {
-        perror("munmap failed");
+    // Vérifier les variables locales
+    LocalVariable *current = local_vars;
+    while (current) {
+        if (strcmp(current->name, name) == 0) {
+            return current->value;
+        }
+        current = current->next;
     }
-    if (shm_unlink(SHARED_MEMORY_NAME) == -1) {
-        perror("shm_unlink failed");
+
+    // Vérifier les variables d'environnement
+    char *current_env = shared_memory;
+    while (*current_env) {
+        if (strncmp(current_env, name, strlen(name)) == 0 && current_env[strlen(name)] == '=') {
+            return current_env + strlen(name) + 1;
+        }
+        current_env += strlen(current_env) + 1;
     }
+
+    return NULL; // Variable non trouvée
 }
