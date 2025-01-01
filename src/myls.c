@@ -71,7 +71,7 @@ void list_directory(const char *dir_path, bool show_all, bool recursive) {
     }
 
     printf("\n%s:\n", dir_path);
-    printf("total %d\n", total_blocks);
+    printf("total %d\n", total_blocks / 2);
 
     // Afficher les fichiers
     for (int i = 0; i < file_count; i++) {

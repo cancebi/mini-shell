@@ -8,6 +8,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <ctype.h>
+#include <time.h>
 
 #define MAX_PATH 512
 #define MAX_CMD 256
@@ -49,12 +50,32 @@ const char *get_tty(const char *proc_path) {
     return tty;
 }
 
+// Fonction pour convertir le temps de démarrage en format lisible
+void get_start_time(unsigned long start_time, long clk_tck, time_t boot_time, char *start_buffer, size_t buffer_size) {
+    time_t process_start_time = boot_time + (start_time / clk_tck);
+    struct tm *local_time = localtime(&process_start_time);
+    if (local_time) {
+        strftime(start_buffer, buffer_size, "%H:%M", local_time);
+    } else {
+        strncpy(start_buffer, "unknown", buffer_size);
+    }
+}
+
+// Fonction pour convertir le temps CPU utilisé en format lisible
+void get_cpu_time(unsigned long utime, unsigned long stime, long clk_tck, char *time_buffer, size_t buffer_size) {
+    unsigned long total_time = (utime + stime) / clk_tck;
+    unsigned long minutes = total_time / 60;
+    unsigned long seconds = total_time % 60;
+    snprintf(time_buffer, buffer_size, "%02lu:%02lu", minutes, seconds);
+}
+
 // Fonction pour récupérer les informations d'un processus
 void get_process_info(const char *pid, const char *proc_path, struct sysinfo *sys_info) {
-    char stat_path[MAX_PATH], status_path[MAX_PATH], cmdline_path[MAX_PATH];
+    char stat_path[MAX_PATH], status_path[MAX_PATH], cmdline_path[MAX_PATH], comm_path[MAX_PATH];
     snprintf(stat_path, MAX_PATH, "%s/stat", proc_path);
     snprintf(status_path, MAX_PATH, "%s/status", proc_path);
     snprintf(cmdline_path, MAX_PATH, "%s/cmdline", proc_path);
+    snprintf(comm_path, MAX_PATH, "%s/comm", proc_path);
 
     FILE *stat_file = fopen(stat_path, "r");
     FILE *status_file = fopen(status_path, "r");
@@ -70,6 +91,8 @@ void get_process_info(const char *pid, const char *proc_path, struct sysinfo *sy
     unsigned long utime, stime, vsize, rss, start_time;
     uid_t uid = -1;
     char cmdline[MAX_CMD] = "[unknown]";
+    char start_buffer[16] = "unknown";  // Pour START
+    char time_buffer[16] = "00:00";     // Pour TIME
 
     fscanf(stat_file, "%*d %s %c %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u %lu %lu %*d %*d %*d %*d %lu %lu %lu",
            comm, &state, &utime, &stime, &vsize, &rss, &start_time);
@@ -86,25 +109,33 @@ void get_process_info(const char *pid, const char *proc_path, struct sysinfo *sy
 
     if (cmdline_file) {
         size_t len = fread(cmdline, 1, sizeof(cmdline) - 1, cmdline_file);
-        if (len == 0) {
-            strncpy(cmdline, "[kernel thread]", sizeof(cmdline) - 1);
+        if (len > 0) {
+            cmdline[len] = '\0';
+        } else {
+            // Toujours ajouter des crochets, même si comm contient des parenthèses
+            snprintf(cmdline, sizeof(cmdline), "[%.250s]", comm);
         }
-        cmdline[len] = '\0';
         fclose(cmdline_file);
     } else {
-        strncpy(cmdline, "[unreadable]", sizeof(cmdline) - 1);
+        // Toujours ajouter des crochets, même si comm contient des parenthèses
+        snprintf(cmdline, sizeof(cmdline), "[%.250s]", comm);
     }
 
-    unsigned long vsize_kb = vsize / 1024;
-    unsigned long rss_kb = rss * sysconf(_SC_PAGESIZE) / 1024;
 
-    char tty[16];
-    snprintf(tty, sizeof(tty), "%s", get_tty(proc_path));
-    float cpu_usage = calculate_cpu(utime, stime, start_time, sys_info->uptime, sysconf(_SC_CLK_TCK));
-    float mem_usage = calculate_mem(rss * sysconf(_SC_PAGESIZE), sys_info->totalram);
 
-    printf("%-10s %5s %5.1f %5.1f %8lu %7lu %-6s %c %s\n",
-           get_username(uid), pid, cpu_usage, mem_usage, vsize_kb, rss_kb, tty, state, cmdline);
+
+
+    // Calcul START et TIME
+    time_t boot_time = time(NULL) - sys_info->uptime;
+    get_start_time(start_time, sysconf(_SC_CLK_TCK), boot_time, start_buffer, sizeof(start_buffer));
+    get_cpu_time(utime, stime, sysconf(_SC_CLK_TCK), time_buffer, sizeof(time_buffer));
+
+    printf("%-10s %5s %5.1f %5.1f %8lu %7lu %-6s %c %-5s %-5s %s\n",
+           get_username(uid), pid,
+           calculate_cpu(utime, stime, start_time, sys_info->uptime, sysconf(_SC_CLK_TCK)),
+           calculate_mem(rss * sysconf(_SC_PAGESIZE), sys_info->totalram),
+           vsize / 1024, rss * sysconf(_SC_PAGESIZE) / 1024,
+           get_tty(proc_path), state, start_buffer, time_buffer, cmdline);
 }
 
 // Fonction principale pour lister les processus
@@ -119,7 +150,7 @@ void myps() {
     struct sysinfo sys_info;
     sysinfo(&sys_info);
 
-    printf("USER       PID  %%CPU %%MEM      VSZ    RSS   TTY   STAT COMMAND\n");
+    printf("USER       PID  %%CPU %%MEM      VSZ    RSS   TTY   STAT START TIME  COMMAND\n");
 
     while ((entry = readdir(proc_dir)) != NULL) {
         if (!isdigit(entry->d_name[0])) {
