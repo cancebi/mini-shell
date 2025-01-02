@@ -16,7 +16,7 @@ int background = 0;
 
 int execute_command(char *command) {
 
-    //substitute_variables(command); // Substituer les variables
+    substitute_variables(command); // Substituer les variables
 
     // Vérifier la présence d'un pipeline
     if (strchr(command, '|')) {
