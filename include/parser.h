@@ -1,4 +1,3 @@
-// parser.h
 #ifndef PARSER_H
 #define PARSER_H
 
@@ -18,4 +17,6 @@ typedef struct {
 void remove_quotes(char *str);
 ParsedCommand *parse_input(char *input, int *num_commands);
 void trim_whitespace(char *str);
+
+
 #endif

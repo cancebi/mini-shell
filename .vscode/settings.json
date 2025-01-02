@@ -10,6 +10,8 @@
     "stdio.h": "c",
     "wildcard.h": "c",
     "process_manager.h": "c",
-    "string.h": "c"
+    "string.h": "c",
+    "unistd.h": "c",
+    "type_traits": "c"
   }
 }

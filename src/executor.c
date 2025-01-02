@@ -1,9 +1,9 @@
 #include "../include/executor.h"
-#include "../include/redirection.h"
-#include "../include/wildcard.h"
 #include "../include/myls.h"
 #include "../include/myps.h"
 #include "../include/parser.h"
+#include "../include/wildcard.h"
+#include "../include/redirection.h"
 #include "../include/process_manager.h"
 #include "../include/variable.h"
 #include <stdio.h>
@@ -14,22 +14,29 @@
 
 int background = 0;
 
+
+
+/**
+ * @brief Exécute une commande avec ou sans arguments.
+ * 
+ * @param command La commande à exécuter, incluant éventuellement des arguments.
+ * @return int Le code de retour de la commande après son exécution.
+ * 
+ */
 int execute_command(char *command) {
 
-    //substitute_variables(command); // Substituer les variables
-
-    // Vérifier la présence d'un pipeline
+    
     if (strchr(command, '|')) {
         return handle_pipeline(command);
     }
 
-    // Vérifier si la commande doit être exécutée en arrière-plan
+   
     char *ampersand = strrchr(command, '&');
     if (ampersand && *(ampersand + 1) == '\0') {
         background = 1;
-        *ampersand = '\0'; // Supprimer le '&' de la commande
+        *ampersand = '\0'; 
         while (*(ampersand - 1) == ' ') {
-            *(--ampersand) = '\0'; // Supprimer les espaces précédents
+            *(--ampersand) = '\0'; 
         }
     }
 
@@ -37,21 +44,19 @@ int execute_command(char *command) {
     int status;
 
     if (pid == 0) {
-        // Processus enfant : gérer les redirections et exécuter la commande
         handle_redirection(command);
 
         char *args[100];
         int i = 0;
 
-        // Découper la commande en arguments
         char *token = strtok(command, " ");
         while (token != NULL && i < 99) {
             int has_wildcard = (strchr(token, '*') != NULL || strchr(token, '?') != NULL || strchr(token, '[') != NULL);
             int is_escaped_token = 0;
 
-            remove_quotes(token); // Supprimer les guillemets
+            remove_quotes(token); 
 
-            // Vérifier si le token contient un caractère échappé
+            
             for (int j = 0; token[j] != '\0'; j++) {
                 if (is_escaped(token, j)) {
                     is_escaped_token = 1;
@@ -59,7 +64,7 @@ int execute_command(char *command) {
                 }
             }
 
-            // Si le token contient un joker non échappé, l'étendre
+            
             if (has_wildcard && !is_escaped_token) {
                 int num_matches = 0;
                 char **matches = expand_wildcard(token, &num_matches);
@@ -77,74 +82,101 @@ int execute_command(char *command) {
             }
             token = strtok(NULL, " ");
         }
-        args[i] = NULL;  // Terminer le tableau d'arguments par NULL
+        args[i] = NULL;
 
-        // Gestion des commandes spécifiques
+        
         if (strcmp(args[0], "myls") == 0) {
             myls_run(i, args);
             exit(0);
-        } else if (strcmp(args[0], "myps") == 0) {
-            myps();
-            exit(0);
-        }else {
-            // Exécuter la commande avec execvp
+        } else {
             if (execvp(args[0], args) == -1) {
                 fprintf(stderr, "Command not found: %s\n", args[0]);
-                exit(127);  // État de sortie non nul en cas d'échec
+                exit(127);
             }
         }
     } else if (pid > 0) {
 
         if (background) {
-            add_job(pid, command); // Ajouter le processus à la liste des jobs
+            add_job(pid, command);
         } else {
             if (waitpid(pid, &status, 0) == -1) {
                 perror("waitpid failed");
-                return 127;  // Indiquer un échec
+                return 127; 
             }
             if (WIFEXITED(status)) {
-                return WEXITSTATUS(status);  // Retourner le code de sortie de l'enfant
+                return WEXITSTATUS(status);
             }
         }
-        return 127;  // Retourner une valeur non nulle si l'enfant ne s'est pas terminé normalement
+        return 127;
     } else {
         perror("fork failed");
     }
-    return 127;  // Retourner une valeur non nulle si fork échoue
+    return 127;
 }
 
-// Commande myjobs
+
+/**
+ * @brief Affiche la liste des tâches en cours d'exécution en arrière-plan.
+ * 
+ * Cette fonction affiche les processus qui ont été lancés en mode arrière-plan 
+ * en utilisant les fonctionnalités de gestion des tâches du shell.
+ * 
+ */
 void execute_myjobs() {
     list_jobs();
 }
 
-// Commandes myfg et mybg
+/**
+ * @brief Amène une tâche en arrière-plan au premier plan.
+ * 
+ * @param job_id L'identifiant de la tâche à ramener au premier plan.
+ * Cette fonction suspend l'exécution du shell jusqu'à la fin de la tâche.
+ * 
+ */
 void execute_myfg(int job_id) {
     bring_job_to_foreground(job_id);
 }
 
+
+/**
+ * @brief Relance une tâche suspendue ou arrêtée en arrière-plan.
+ * 
+ * @param job_id L'identifiant de la tâche à relancer en arrière-plan.
+ * Cette fonction rétablit l'exécution d'une tâche arrêtée sans la ramener au premier plan.
+ * 
+ */
 void execute_mybg(int job_id) {
     move_job_to_background(job_id);
 }
 
-// Fonction pour remplacer les variables dans une commande
+
+
+/**
+ * @brief Remplace les variables dans une commande par leurs valeurs correspondantes.
+ * 
+ * Cette fonction analyse une commande donnée pour identifier les variables représentées par `$<nom>`.
+ * Elle remplace chaque variable trouvée par sa valeur associée, si elle est définie. Si une variable
+ * n'est pas définie, un message d'erreur est affiché.
+ * 
+ * @param command La commande contenant potentiellement des variables à remplacer. 
+ *        La commande d'origine est modifiée en place pour refléter les substitutions.
+ */
 void substitute_variables(char *command) {
     char buffer[1024];
     char *src = command, *dest = buffer;
 
     while (*src) {
         if (*src == '$') {
-            src++; // Passer le symbole '$'
+            src++;
             char var_name[64];
             char *var_start = var_name;
 
-            // Lire le nom de la variable
+            
             while (*src && ((*src >= 'a' && *src <= 'z') || (*src >= 'A' && *src <= 'Z') || (*src >= '0' && *src <= '9') || *src == '_')) {
                 *var_start++ = *src++;
             }
             *var_start = '\0';
 
-            // Récupérer la valeur de la variable
             char *value = get_variable_value(var_name);
             if (value) {
                 while (*value) {
@@ -159,7 +191,8 @@ void substitute_variables(char *command) {
     }
     *dest = '\0';
 
-    // Copier le résultat dans la commande d'origine
+    
     strncpy(command, buffer, sizeof(buffer) - 1);
     command[sizeof(buffer) - 1] = '\0';
 }
+

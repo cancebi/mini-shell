@@ -2,7 +2,6 @@
 #define EXECUTOR_H
 
 
-// Executes a command and returns the exit status
 int execute_command(char *command);
 void execute_myjobs();
 void execute_myfg(int job_id);

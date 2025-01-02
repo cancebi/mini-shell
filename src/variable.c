@@ -6,7 +6,7 @@
 #include <sys/shm.h>
 #include <pthread.h>
 
-// Structures pour les variables locales
+
 typedef struct LocalVariable {
     char name[64];
     char value[256];
@@ -15,14 +15,21 @@ typedef struct LocalVariable {
 
 LocalVariable *local_vars = NULL;
 
-// Structures pour les variables d'environnement
+
 #define SHM_KEY 12345
 #define SHM_SIZE 4096
 char *shared_memory = NULL;
 int shm_id;
 pthread_mutex_t shm_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-// Initialisation de la mémoire partagée
+
+/**
+ * @brief Initialise la mémoire partagée pour stocker les variables d'environnement.
+ * 
+ * Cette fonction crée un segment de mémoire partagée avec une taille prédéfinie
+ * et initialise son contenu à zéro. Elle est utilisée pour gérer les variables
+ * d'environnement entre différents processus.
+ */
 void init_shared_memory() {
     shm_id = shmget(SHM_KEY, SHM_SIZE, IPC_CREAT | 0666);
     if (shm_id < 0) {
@@ -37,7 +44,13 @@ void init_shared_memory() {
     memset(shared_memory, 0, SHM_SIZE);
 }
 
-// Destruction de la mémoire partagée
+
+/**
+ * @brief Détruit la mémoire partagée utilisée pour les variables d'environnement.
+ * 
+ * Cette fonction détache le segment de mémoire partagée du processus actuel
+ * et le marque pour suppression.
+ */
 void destroy_shared_memory() {
     if (shmdt(shared_memory) == -1) {
         perror("shmdt failed");
@@ -47,8 +60,19 @@ void destroy_shared_memory() {
     }
 }
 
-// Gestion des variables locales
+
+/**
+ * @brief Définit une variable locale avec un nom et une valeur.
+ * 
+ * Cette fonction ajoute une nouvelle variable locale ou met à jour la valeur
+ * d'une variable existante. Les noms et les valeurs ont des longueurs maximales
+ * définies pour éviter les dépassements de mémoire.
+ * 
+ * @param name Le nom de la variable locale.
+ * @param value La valeur de la variable locale.
+ */
 void set_local_variable(const char *name, const char *value) {
+    
     if (!name || !value || strlen(name) == 0 || strlen(value) == 0 || strlen(name) >= 64 || strlen(value) >= 256) {
         fprintf(stderr, "Error: Invalid name or value for local variable.\n");
         return;
@@ -57,7 +81,6 @@ void set_local_variable(const char *name, const char *value) {
     LocalVariable *current = local_vars;
     while (current) {
         if (strcmp(current->name, name) == 0) {
-            // Mise à jour si la variable existe
             strncpy(current->value, value, sizeof(current->value) - 1);
             current->value[sizeof(current->value) - 1] = '\0';
             return;
@@ -65,14 +88,13 @@ void set_local_variable(const char *name, const char *value) {
         current = current->next;
     }
 
-    // Ajouter une nouvelle variable
     LocalVariable *new_var = malloc(sizeof(LocalVariable));
     if (!new_var) {
         perror("malloc failed");
         return;
     }
 
-    memset(new_var, 0, sizeof(LocalVariable)); // Initialiser la structure
+    memset(new_var, 0, sizeof(LocalVariable));
     strncpy(new_var->name, name, sizeof(new_var->name) - 1);
     new_var->name[sizeof(new_var->name) - 1] = '\0';
     strncpy(new_var->value, value, sizeof(new_var->value) - 1);
@@ -82,6 +104,14 @@ void set_local_variable(const char *name, const char *value) {
 }
 
 
+/**
+ * @brief Supprime une variable locale existante.
+ * 
+ * Cette fonction recherche et supprime une variable locale par son nom.
+ * Si la variable n'est pas trouvée, un message d'erreur est affiché.
+ * 
+ * @param name Le nom de la variable locale à supprimer.
+ */
 void unset_local_variable(const char *name) {
     if (!name || strlen(name) == 0) {
         fprintf(stderr, "Error: Invalid name for local variable.\n");
@@ -92,19 +122,23 @@ void unset_local_variable(const char *name) {
     while (*current) {
         if (strcmp((*current)->name, name) == 0) {
             LocalVariable *to_delete = *current;
-            *current = (*current)->next; // Réorganiser la liste
-            free(to_delete); // Libérer la mémoire
+            *current = (*current)->next; 
+            free(to_delete);
             return;
         }
         current = &((*current)->next);
     }
 
-    // Si la variable n'est pas trouvée
     fprintf(stderr, "Error: Variable %s not found.\n", name);
 }
 
 
-
+/**
+ * @brief Affiche toutes les variables locales et leurs valeurs.
+ * 
+ * Parcourt la liste des variables locales et imprime leurs noms et valeurs
+ * au format `nom=valeur`.
+ */
 void list_local_variables() {
     LocalVariable *current = local_vars;
     while (current) {
@@ -113,7 +147,15 @@ void list_local_variables() {
     }
 }
 
-// Gestion des variables d'environnement
+/**
+ * @brief Définit une variable d'environnement dans la mémoire partagée.
+ * 
+ * Cette fonction ajoute ou met à jour une variable d'environnement dans la mémoire partagée.
+ * Si la mémoire est pleine ou non initialisée, elle affiche un message d'erreur.
+ * 
+ * @param name Le nom de la variable d'environnement.
+ * @param value La valeur de la variable d'environnement.
+ */
 void set_env_variable(const char *name, const char *value) {
     if (!shared_memory) {
         fprintf(stderr, "Shared memory not initialized.\n");
@@ -145,7 +187,14 @@ void set_env_variable(const char *name, const char *value) {
 
 
 
-
+/**
+ * @brief Supprime une variable d'environnement de la mémoire partagée.
+ * 
+ * Cette fonction recherche une variable d'environnement dans la mémoire partagée
+ * et la supprime si elle existe.
+ * 
+ * @param name Le nom de la variable d'environnement à supprimer.
+ */
 void unset_env_variable(const char *name) {
     if (!shared_memory) {
         fprintf(stderr, "Shared memory not initialized.\n");
@@ -178,7 +227,12 @@ void unset_env_variable(const char *name) {
     }
 }
 
-
+/**
+ * @brief Affiche toutes les variables d'environnement stockées dans la mémoire partagée.
+ * 
+ * Parcourt la mémoire partagée et imprime chaque variable d'environnement au format
+ * `nom=valeur`.
+ */
 void list_env_variables() {
     char *current = shared_memory;
     while (*current) {
@@ -187,13 +241,21 @@ void list_env_variables() {
     }
 }
 
-// Récupérer la valeur d'une variable (locale ou environnement)
+/**
+ * @brief Récupère la valeur d'une variable locale ou d'environnement.
+ * 
+ * Cette fonction recherche d'abord la variable dans la liste des variables locales,
+ * puis dans les variables d'environnement stockées dans la mémoire partagée.
+ * 
+ * @param name Le nom de la variable à rechercher.
+ * @return char* La valeur de la variable ou `NULL` si elle n'est pas trouvée.
+ */
 char *get_variable_value(const char *name) {
     if (!name || strlen(name) == 0) {
-        return NULL; // Nom invalide
+        return NULL;
     }
 
-    // Vérifier les variables locales
+    
     LocalVariable *current = local_vars;
     while (current) {
         if (strcmp(current->name, name) == 0) {
@@ -202,7 +264,6 @@ char *get_variable_value(const char *name) {
         current = current->next;
     }
 
-    // Vérifier les variables d'environnement
     char *current_env = shared_memory;
     while (*current_env) {
         if (strncmp(current_env, name, strlen(name)) == 0 && current_env[strlen(name)] == '=') {
@@ -211,5 +272,5 @@ char *get_variable_value(const char *name) {
         current_env += strlen(current_env) + 1;
     }
 
-    return NULL; // Variable non trouvée
+    return NULL;
 }

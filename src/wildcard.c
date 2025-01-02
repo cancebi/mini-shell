@@ -6,12 +6,38 @@
 #include <fnmatch.h>
 #include <stdbool.h>
 
+
+/**
+ * @brief Vérifie si un caractère à une position donnée dans une chaîne est échappé.
+ * 
+ * Cette fonction détermine si un caractère dans une chaîne est précédé d'un caractère 
+ * d'échappement (`\`) et ne doit donc pas être interprété comme un caractère spécial.
+ * 
+ * @param pattern La chaîne de caractères à vérifier.
+ * @param index L'index du caractère à analyser.
+ * @return bool Retourne `true` si le caractère est échappé, sinon `false`.
+ */
 bool is_escaped(const char *pattern, int index) {
     return (index > 0 && pattern[index - 1] == '\\');
 }
 
+
+/**
+ * @brief Étend un motif contenant des jokers (`*`, `?`, etc.) en une liste de correspondances.
+ * 
+ * Cette fonction analyse un motif contenant des caractères spéciaux (jokers) et recherche 
+ * tous les fichiers ou répertoires correspondants dans le chemin spécifié. Les résultats
+ * sont retournés sous forme de tableau de chaînes.
+ * 
+ * @param pattern Le motif contenant des jokers à étendre.
+ * @param num_matches Un pointeur vers un entier pour stocker le nombre de correspondances trouvées.
+ * @return char** Un tableau de chaînes contenant les chemins des fichiers correspondants.
+ *         Retourne `NULL` si une erreur survient ou si aucune correspondance n'est trouvée.
+ * 
+ * @note L'utilisateur est responsable de libérer la mémoire des chaînes dans le tableau retourné.
+ */
 char **expand_wildcard(const char *pattern, int *num_matches) {
-    // Extract directory path and pattern
+    
     const char *last_slash = strrchr(pattern, '/');
     char dir_path[1024] = ".";
     const char *search_pattern = pattern;
@@ -45,13 +71,13 @@ char **expand_wildcard(const char *pattern, int *num_matches) {
 
     struct dirent *entry;
     while ((entry = readdir(dir)) != NULL) {
-        // Skip hidden files unless explicitly matched
+        
         if (entry->d_name[0] == '.' && search_pattern[0] != '.') {
             continue;
         }
 
         if (fnmatch(search_pattern, entry->d_name, FNM_NOESCAPE) == 0) {
-            size_t full_path_len = strlen(dir_path) + 1 + strlen(entry->d_name) + 1; // +1 for '/' and +1 for '\0'
+            size_t full_path_len = strlen(dir_path) + 1 + strlen(entry->d_name) + 1;
             if (full_path_len > 1024) {
                 fprintf(stderr, "Path is too long: %s/%s\n", dir_path, entry->d_name);
                 continue;
@@ -67,7 +93,7 @@ char **expand_wildcard(const char *pattern, int *num_matches) {
             matches[*num_matches] = full_match;
             (*num_matches)++;
 
-            // Resize matches array if necessary
+            
             if (*num_matches >= capacity) {
                 capacity += 100;
                 char **temp = realloc(matches, capacity * sizeof(char *));

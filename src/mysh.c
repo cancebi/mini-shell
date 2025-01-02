@@ -7,6 +7,7 @@
 #include "../include/executor.h"
 #include "../include/parser.h"
 #include "../include/variable.h"
+#include "../include/myps.h"
 
 
 #define ROUGE(x) "\033[31m" x "\033[0m"
@@ -21,6 +22,15 @@ int last_status = -1;
 char current_directory[MAX_PATH_LENGTH];  
 char global_command_line[MAX_COMMAND_LENGTH];
 
+
+/**
+ * @brief Gère le signal SIGINT (Ctrl+C) et propose de quitter le shell.
+ * 
+ * Si un processus en avant-plan est en cours, le signal est ignoré.
+ * Sinon, l'utilisateur est invité à confirmer la sortie du shell.
+ * 
+ * @param sig Signal reçu (toujours SIGINT).
+ */
 void handle_sigint(int sig){
     if (foreground_running){
         return;
@@ -29,7 +39,7 @@ void handle_sigint(int sig){
     fflush(stdout);
 
     int response = getchar();
-    while (getchar() != '\n'); // Clear any additional input characters
+    while (getchar() != '\n');
 
     if (response == 'y' || response == 'Y') {
         printf("Exiting mysh.\n");
@@ -46,18 +56,35 @@ void handle_sigint(int sig){
     }
 }
 
+
+/**
+ * @brief Change le répertoire de travail actuel.
+ * 
+ * Cette fonction met à jour le répertoire de travail vers le chemin spécifié.
+ * Si le chemin est NULL ou "~", il change vers le répertoire HOME.
+ * 
+ * @param path Chemin vers le répertoire cible.
+ * @return int 0 si réussi, 1 sinon.
+ */
 int change_directory(char *path) {
     if (path == NULL || strcmp(path, "~") == 0) {
-        path = getenv("HOME");  // Default to home directory
+        path = getenv("HOME");
     }
 
     if (chdir(path) != 0) {
         perror("cd failed");
-        return 1;  // Non-zero status for failure
+        return 1; 
     }
-    return 0;  // Zero status for success
+    return 0;
 }
 
+
+/**
+ * @brief Affiche le statut de la dernière commande exécutée.
+ * 
+ * Si aucune commande n'a été exécutée, un message approprié est affiché.
+ * Indique également si la dernière commande s'est terminée correctement ou non.
+ */
 void print_status() {
     if (last_status == -1) {
         printf("No commands have been executed yet.\n");
@@ -72,6 +99,14 @@ void print_status() {
     last_status = 0;
 }
 
+
+/**
+ * @brief Boucle principale du shell interactif.
+ * 
+ * Gère la lecture des commandes utilisateur, l'analyse, et leur exécution.
+ * Supporte les commandes internes telles que `cd`, `exit`, `status`, `myjobs`, 
+ * ainsi que la gestion des variables locales et d'environnement.
+ */
 void run_shell() {
     int num_commands;
 
@@ -87,20 +122,20 @@ void run_shell() {
 
         ssize_t n = read(STDIN_FILENO, global_command_line, MAX_COMMAND_LENGTH - 1);
         if (n > 0) {
-            global_command_line[n] = '\0'; // Null-terminate the input
+            global_command_line[n] = '\0';
             size_t length = strcspn(global_command_line, "\n");
-            global_command_line[length] = '\0'; // Remove newline if present
+            global_command_line[length] = '\0';
         } else if (n == -1) {
             perror("read error");
             continue;
         }
 
         if (strlen(global_command_line) == 0) {
-            continue; // Skip to the next iteration if input is empty
+            continue;
         }
 
         if (strspn(global_command_line, " ") == strlen(global_command_line)) {
-            continue; // Skip to the next iteration if input is only whitespace
+            continue;
         }
 
         if(strncmp(global_command_line, "cd", 2) == 0 ){
@@ -119,21 +154,34 @@ void run_shell() {
             print_status();
             continue;
         }
-
-        if (strncmp(global_command_line, "myjobs", 6) == 0) {
-            execute_myjobs();
+        
+        if (strcmp(global_command_line, "myps") == 0) {
+            myps();
+            strncpy(last_command_name, "myps", MAX_COMMAND_LENGTH);
+            last_status = 0;
             continue;
         }
-        
+
+        if (strcmp(global_command_line, "myjobs") == 0) {
+            execute_myjobs();
+            strncpy(last_command_name, "myjobs", MAX_COMMAND_LENGTH);
+            last_status = 0;
+            continue;
+        }
+
         if (strncmp(global_command_line, "myfg", 4) == 0) {
             int job_id = atoi(global_command_line + 5);
             execute_myfg(job_id);
+            strncpy(last_command_name, "myfg", MAX_COMMAND_LENGTH);
+            last_status = 0;
             continue;
         }
-        
+
         if (strncmp(global_command_line, "mybg", 4) == 0) {
             int job_id = atoi(global_command_line + 5);
             execute_mybg(job_id);
+            strncpy(last_command_name, "mybg", MAX_COMMAND_LENGTH);
+            last_status = 0;
             continue;
         }
 
@@ -142,8 +190,11 @@ void run_shell() {
             char *value = strtok(NULL, "");
             if (name && value) {
                 set_local_variable(name, value);
+                strncpy(last_command_name, "set", MAX_COMMAND_LENGTH);
+                last_status = 0;
             } else {
                 fprintf(stderr, "Usage: set name=value\n");
+                last_status = 1;
             }
             continue;
         }
@@ -153,43 +204,45 @@ void run_shell() {
             char *value = strtok(NULL, "");
             if (name && value) {
                 set_env_variable(name, value);
+                strncpy(last_command_name, "setenv", MAX_COMMAND_LENGTH);
+                last_status = 0;
             } else {
                 fprintf(stderr, "Usage: setenv name=value\n");
+                last_status = 1;
             }
             continue;
         }
-
-
 
         if (strncmp(global_command_line, "unset ", 6) == 0) {
             char *name = global_command_line + 6;
-            // Ne pas interpréter $ comme une substitution dans unset
             if (name[0] == '$') {
-                name++; // Ignorer le symbole $ pour obtenir le nom réel de la variable
+                name++;
             }
             unset_local_variable(name);
+            strncpy(last_command_name, "unset", MAX_COMMAND_LENGTH);
+            last_status = 0;
             continue;
         }
-
-
 
         if (strncmp(global_command_line, "unsetenv ", 9) == 0) {
             char *name = global_command_line + 9;
-            // Ne pas interpréter $ comme une substitution dans unsetenv
             if (name[0] == '$') {
-                name++; // Ignorer le symbole $ pour obtenir le nom réel de la variable
+                name++; 
             }
             unset_env_variable(name);
+            strncpy(last_command_name, "unsetenv", MAX_COMMAND_LENGTH);
+            last_status = 0;
             continue;
         }
-        
-        
+
         if (strncmp(global_command_line, "echo ", 5) == 0) {
             char *args = global_command_line + 5;
-            substitute_variables(args); // Traiter les variables si elles existent
+            substitute_variables(args);
             printf("%s\n", args);
+            strncpy(last_command_name, "echo", MAX_COMMAND_LENGTH);
+            last_status = 0;
             continue;
-        } 
+        }
 
         ParsedCommand *commands = parse_input(global_command_line, &num_commands);
 
@@ -214,8 +267,18 @@ void run_shell() {
     }
 }
 
+
+/**
+ * @brief Point d'entrée principal du programme.
+ * 
+ * Initialise les ressources nécessaires telles que la mémoire partagée,
+ * démarre la boucle principale du shell et nettoie les ressources à la fin.
+ * 
+ * @return int Code de retour du programme.
+ */
 int main() {
-     // Initialiser la mémoire partagée pour les variables d'environnement
+
+    // Initialiser la mémoire partagée pour les variables d'environnement
     init_shared_memory();
 
     // Lancer le shell
@@ -223,5 +286,6 @@ int main() {
 
     // Libérer la mémoire partagée à la fin
     destroy_shared_memory();
+
     return 0;
 }

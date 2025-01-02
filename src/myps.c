@@ -13,25 +13,50 @@
 #define MAX_PATH 512
 #define MAX_CMD 256
 
-// Fonction pour obtenir le nom d'utilisateur à partir de l'UID
+/**
+ * @brief Récupère le nom d'utilisateur correspondant à un UID donné.
+ * 
+ * @param uid L'UID de l'utilisateur.
+ * @return const char* Le nom d'utilisateur ou "unknown" si non trouvé.
+ */
 const char *get_username(uid_t uid) {
     struct passwd *pw = getpwuid(uid);
     return pw ? pw->pw_name : "unknown";
 }
 
-// Fonction pour calculer l'utilisation CPU (approximation)
+/**
+ * @brief Calcule l'utilisation du CPU d'un processus en pourcentage.
+ * 
+ * @param utime Temps utilisateur consommé par le processus.
+ * @param stime Temps système consommé par le processus.
+ * @param start_time Temps de démarrage du processus.
+ * @param uptime Temps d'activité total du système.
+ * @param clk_tck Ticks par seconde (valeur de sysconf(_SC_CLK_TCK)).
+ * @return float Pourcentage d'utilisation du CPU.
+ */
 float calculate_cpu(unsigned long utime, unsigned long stime, unsigned long start_time, long uptime, long clk_tck) {
     unsigned long total_time = utime + stime;
     float seconds = uptime - (start_time / clk_tck);
     return (seconds > 0) ? 100.0 * ((float)total_time / clk_tck) / seconds : 0.0;
 }
 
-// Fonction pour calculer l'utilisation mémoire (en pourcentage)
+/**
+ * @brief Calcule l'utilisation de la mémoire d'un processus en pourcentage.
+ * 
+ * @param rss Résident Set Size (taille mémoire occupée en RAM).
+ * @param totalram Taille totale de la RAM du système.
+ * @return float Pourcentage d'utilisation de la mémoire.
+ */
 float calculate_mem(unsigned long rss, unsigned long totalram) {
     return (totalram > 0) ? 100.0 * ((float)rss / totalram) : 0.0;
 }
 
-// Fonction pour obtenir le terminal associé au processus
+/**
+ * @brief Récupère le terminal (TTY) associé à un processus.
+ * 
+ * @param proc_path Chemin du répertoire du processus dans `/proc`.
+ * @return const char* Le nom du terminal associé ou "?" si aucun.
+ */
 const char *get_tty(const char *proc_path) {
     static char tty[16] = "?";
     char fd_path[MAX_PATH];
@@ -50,7 +75,15 @@ const char *get_tty(const char *proc_path) {
     return tty;
 }
 
-// Fonction pour convertir le temps de démarrage en format lisible
+/**
+ * @brief Convertit le temps de démarrage d'un processus en une chaîne lisible.
+ * 
+ * @param start_time Temps de démarrage du processus en ticks.
+ * @param clk_tck Ticks par seconde.
+ * @param boot_time Temps de démarrage du système.
+ * @param start_buffer Buffer pour stocker la chaîne de temps.
+ * @param buffer_size Taille du buffer.
+ */
 void get_start_time(unsigned long start_time, long clk_tck, time_t boot_time, char *start_buffer, size_t buffer_size) {
     time_t process_start_time = boot_time + (start_time / clk_tck);
     struct tm *local_time = localtime(&process_start_time);
@@ -61,7 +94,15 @@ void get_start_time(unsigned long start_time, long clk_tck, time_t boot_time, ch
     }
 }
 
-// Fonction pour convertir le temps CPU utilisé en format lisible
+/**
+ * @brief Convertit le temps CPU consommé par un processus en une chaîne lisible.
+ * 
+ * @param utime Temps utilisateur consommé.
+ * @param stime Temps système consommé.
+ * @param clk_tck Ticks par seconde.
+ * @param time_buffer Buffer pour stocker la chaîne de temps.
+ * @param buffer_size Taille du buffer.
+ */
 void get_cpu_time(unsigned long utime, unsigned long stime, long clk_tck, char *time_buffer, size_t buffer_size) {
     unsigned long total_time = (utime + stime) / clk_tck;
     unsigned long minutes = total_time / 60;
@@ -69,7 +110,17 @@ void get_cpu_time(unsigned long utime, unsigned long stime, long clk_tck, char *
     snprintf(time_buffer, buffer_size, "%02lu:%02lu", minutes, seconds);
 }
 
-// Fonction pour récupérer les informations d'un processus
+
+/**
+ * @brief Récupère et affiche les informations d'un processus.
+ * 
+ * Affiche des détails tels que le nom d'utilisateur, l'utilisation CPU, l'utilisation mémoire,
+ * l'état du processus, le terminal, le temps de démarrage, et la commande exécutée.
+ * 
+ * @param pid L'identifiant (PID) du processus.
+ * @param proc_path Chemin du répertoire du processus dans `/proc`.
+ * @param sys_info Informations système (structure `sysinfo`).
+ */
 void get_process_info(const char *pid, const char *proc_path, struct sysinfo *sys_info) {
     char stat_path[MAX_PATH], status_path[MAX_PATH], cmdline_path[MAX_PATH], comm_path[MAX_PATH];
     snprintf(stat_path, MAX_PATH, "%s/stat", proc_path);
@@ -91,8 +142,8 @@ void get_process_info(const char *pid, const char *proc_path, struct sysinfo *sy
     unsigned long utime, stime, vsize, rss, start_time;
     uid_t uid = -1;
     char cmdline[MAX_CMD] = "[unknown]";
-    char start_buffer[16] = "unknown";  // Pour START
-    char time_buffer[16] = "00:00";     // Pour TIME
+    char start_buffer[16] = "unknown";
+    char time_buffer[16] = "00:00";   
 
     fscanf(stat_file, "%*d %s %c %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u %lu %lu %*d %*d %*d %*d %lu %lu %lu",
            comm, &state, &utime, &stime, &vsize, &rss, &start_time);
@@ -112,20 +163,14 @@ void get_process_info(const char *pid, const char *proc_path, struct sysinfo *sy
         if (len > 0) {
             cmdline[len] = '\0';
         } else {
-            // Toujours ajouter des crochets, même si comm contient des parenthèses
             snprintf(cmdline, sizeof(cmdline), "[%.250s]", comm);
         }
         fclose(cmdline_file);
     } else {
-        // Toujours ajouter des crochets, même si comm contient des parenthèses
         snprintf(cmdline, sizeof(cmdline), "[%.250s]", comm);
     }
 
 
-
-
-
-    // Calcul START et TIME
     time_t boot_time = time(NULL) - sys_info->uptime;
     get_start_time(start_time, sysconf(_SC_CLK_TCK), boot_time, start_buffer, sizeof(start_buffer));
     get_cpu_time(utime, stime, sysconf(_SC_CLK_TCK), time_buffer, sizeof(time_buffer));
@@ -138,7 +183,14 @@ void get_process_info(const char *pid, const char *proc_path, struct sysinfo *sy
            get_tty(proc_path), state, start_buffer, time_buffer, cmdline);
 }
 
-// Fonction principale pour lister les processus
+
+/**
+ * @brief Affiche la liste des processus en cours d'exécution sur le système.
+ * 
+ * Parcourt le répertoire `/proc`, récupère les informations de chaque processus et
+ * les affiche sous forme tabulaire avec des détails tels que l'utilisateur, le PID,
+ * l'utilisation CPU, l'utilisation mémoire, et la commande associée.
+ */
 void myps() {
     DIR *proc_dir = opendir("/proc");
     if (!proc_dir) {
