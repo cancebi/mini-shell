@@ -71,6 +71,10 @@ int execute_command(char *command) {
                         free(matches[j]);
                     }
                     free(matches);
+                    if (num_matches == 0) {
+                        fprintf(stderr, "No matches found for pattern: %s\n", token);
+                    }
+
                 }
             } else {
                 args[i++] = token;
@@ -89,10 +93,10 @@ int execute_command(char *command) {
         }else {
             // Exécuter la commande avec execvp
             if (execvp(args[0], args) == -1) {
-                fprintf(stderr, "Command not found: %s\n", args[0]);
-                exit(127);  // État de sortie non nul en cas d'échec
-            }
-        }
+                fprintf(stderr, "Error: Command '%s' not found or failed to execute. Please check the path or install the required program.\n", args[0]);
+            exit(127);
+        }   
+
     } else if (pid > 0) {
 
         if (background) {
