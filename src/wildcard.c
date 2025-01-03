@@ -98,11 +98,13 @@ char **expand_wildcard(const char *pattern, int *num_matches) {
                 capacity += 100;
                 char **temp = realloc(matches, capacity * sizeof(char *));
                 if (!temp) {
-                    perror("realloc failed");
-                    break;
+                    fprintf(stderr, "Memory reallocation failed while expanding matches.\n");
+                    free(matches);  // Libérer les ressources allouées avant d'échouer
+                    return NULL;
                 }
                 matches = temp;
             }
+
         }
     }
 
