@@ -40,7 +40,11 @@ int execute_command(char *command) {
         }
     }
 
-    pid_t pid = fork();
+    if (pid < 0) {
+        perror("fork failed");
+        return 127;
+    }
+
     int status;
 
     if (pid == 0) {
