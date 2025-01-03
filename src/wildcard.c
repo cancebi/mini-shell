@@ -61,10 +61,11 @@ char **expand_wildcard(const char *pattern, int *num_matches) {
 
     char **matches = malloc(100 * sizeof(char *));
     if (!matches) {
-        perror("malloc failed");
+        fprintf(stderr, "Memory allocation failed for matches array. Check available memory.\n");
         closedir(dir);
         return NULL;
     }
+
 
     *num_matches = 0;
     size_t capacity = 100;
