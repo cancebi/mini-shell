@@ -58,7 +58,7 @@ int execute_command(char *command) {
             int has_wildcard = (strchr(token, '*') != NULL || strchr(token, '?') != NULL || strchr(token, '[') != NULL);
             int is_escaped_token = 0;
 
-            remove_quotes(token); 
+             remove_quotes(token);
 
             
             for (int j = 0; token[j] != '\0'; j++) {

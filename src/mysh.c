@@ -278,15 +278,7 @@ void run_shell() {
             continue;
         }
 
-        if (strncmp(global_command_line, "echo ", 5) == 0) {
-            char *args = global_command_line + 5;
-            substitute_variables(args);
-            printf("%s\n", args);
-            strncpy(last_command_name, "echo", MAX_COMMAND_LENGTH);
-            last_status = 0;
-            continue;
-        }
-        
+
         ParsedCommand *commands = parse_input(global_command_line, &num_commands);
 
         for (int i = 0; i < num_commands; i++) {

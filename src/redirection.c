@@ -20,6 +20,47 @@
  */
 void handle_redirection(char *command) {
     int fd;
+    
+    // Gestion de >& ou >>&
+    char *combined_redirect = strstr(command, ">>&");
+    if (combined_redirect) {
+        *combined_redirect = '\0'; 
+        combined_redirect += 3;   
+
+        while (*combined_redirect == ' ') combined_redirect++;
+
+        fd = open(combined_redirect, O_WRONLY | O_CREAT | O_APPEND, 0644);
+        if (fd == -1) {
+            perror("open failed");
+            return;
+        }
+
+        dup2(fd, STDOUT_FILENO);
+        dup2(fd, STDERR_FILENO);
+        close(fd);
+        return;
+    }
+
+    combined_redirect = strstr(command, ">&");
+    if (combined_redirect) {
+        *combined_redirect = '\0'; 
+        combined_redirect += 2; 
+
+        while (*combined_redirect == ' ') combined_redirect++;
+
+        fd = open(combined_redirect, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (fd == -1) {
+            perror("open failed");
+            return;
+        }
+
+        dup2(fd, STDOUT_FILENO);
+        dup2(fd, STDERR_FILENO);
+        close(fd);
+        return;
+    }
+
+    // Gestion de 2> ou 2>> 
     char *error_redirect = strstr(command, "2>");
     if (error_redirect) {
         int append = (*(error_redirect + 2) == '>'); 
@@ -37,7 +78,7 @@ void handle_redirection(char *command) {
         close(fd);
     }
 
-    
+    // Gestion de > ou >>
     char *output_redirect = strstr(command, ">");
     if (output_redirect && *(output_redirect - 1) != '2') {
         int append = (*(output_redirect + 1) == '>');

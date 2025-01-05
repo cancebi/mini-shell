@@ -1,0 +1,2 @@
+ls: impossible d'accéder à 'nn': Aucun fichier ou dossier de ce type
+ls: impossible d'accéder à 'cc': Aucun fichier ou dossier de ce type

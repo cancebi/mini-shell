@@ -1,0 +1,8 @@
+ls: impossible d'accéder à 'jj': Aucun fichier ou dossier de ce type
+Rapport:
+Documentaion_du_projet.odt
+Documentaion_du_projet.pdf
+ls: impossible d'accéder à 'kk': Aucun fichier ou dossier de ce type
+Rapport:
+Documentaion_du_projet.odt
+Documentaion_du_projet.pdf
