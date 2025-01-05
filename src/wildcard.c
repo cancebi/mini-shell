@@ -109,3 +109,12 @@ char **expand_wildcard(const char *pattern, int *num_matches) {
     closedir(dir);
     return matches;
 }
+
+
+void free_matches(char **matches, int num_matches) {
+    if (!matches) return;
+    for (int i = 0; i < num_matches; i++) {
+        free(matches[i]);
+    }
+    free(matches);
+}

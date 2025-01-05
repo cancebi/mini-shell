@@ -58,7 +58,7 @@ int execute_command(char *command) {
             int has_wildcard = (strchr(token, '*') != NULL || strchr(token, '?') != NULL || strchr(token, '[') != NULL);
             int is_escaped_token = 0;
 
-             remove_quotes(token);
+            remove_quotes(token);
 
             
             for (int j = 0; token[j] != '\0'; j++) {
@@ -75,9 +75,6 @@ int execute_command(char *command) {
                 if (matches) {
                     for (int j = 0; j < num_matches && i < 99; j++) {
                         args[i++] = matches[j];
-                    }
-                    for (int j = 0; j < num_matches; j++) {
-                        free(matches[j]);
                     }
                     free(matches);
                 }
@@ -117,41 +114,6 @@ int execute_command(char *command) {
         return 127;
     }
     return 0;
-}
-
-
-/**
- * @brief Affiche la liste des tâches en cours d'exécution en arrière-plan.
- * 
- * Cette fonction affiche les processus qui ont été lancés en mode arrière-plan 
- * en utilisant les fonctionnalités de gestion des tâches du shell.
- * 
- */
-void execute_myjobs() {
-    list_jobs();
-}
-
-/**
- * @brief Amène une tâche en arrière-plan au premier plan.
- * 
- * @param job_id L'identifiant de la tâche à ramener au premier plan.
- * Cette fonction suspend l'exécution du shell jusqu'à la fin de la tâche.
- * 
- */
-void execute_myfg(int job_id) {
-    bring_job_to_foreground(job_id);
-}
-
-
-/**
- * @brief Relance une tâche suspendue ou arrêtée en arrière-plan.
- * 
- * @param job_id L'identifiant de la tâche à relancer en arrière-plan.
- * Cette fonction rétablit l'exécution d'une tâche arrêtée sans la ramener au premier plan.
- * 
- */
-void execute_mybg(int job_id) {
-    move_job_to_background(job_id);
 }
 
 

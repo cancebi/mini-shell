@@ -181,6 +181,8 @@ void run_shell() {
             continue;
         }
 
+        substitute_variables(global_command_line);
+
         if (strncmp(global_command_line, "cd", 2) == 0) {
             char *directory = strtok(global_command_line + 3, " ");
             last_status = change_directory(directory);
@@ -277,6 +279,10 @@ void run_shell() {
             last_status = 0;
             continue;
         }
+
+        //substitute_variables(global_command_line);
+
+        num_commands = 0;
 
 
         ParsedCommand *commands = parse_input(global_command_line, &num_commands);
