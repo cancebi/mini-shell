@@ -61,11 +61,10 @@ char **expand_wildcard(const char *pattern, int *num_matches) {
 
     char **matches = malloc(100 * sizeof(char *));
     if (!matches) {
-        fprintf(stderr, "Memory allocation failed for matches array. Check available memory.\n");
+        perror("malloc failed");
         closedir(dir);
         return NULL;
     }
-
 
     *num_matches = 0;
     size_t capacity = 100;
@@ -99,22 +98,14 @@ char **expand_wildcard(const char *pattern, int *num_matches) {
                 capacity += 100;
                 char **temp = realloc(matches, capacity * sizeof(char *));
                 if (!temp) {
-                    fprintf(stderr, "Memory reallocation failed while expanding matches.\n");
-                    free(matches);  // Libérer les ressources allouées avant d'échouer
-                    return NULL;
+                    perror("realloc failed");
+                    break;
                 }
                 matches = temp;
             }
-
         }
     }
 
     closedir(dir);
     return matches;
-}
-void free_matches(char **matches, int num_matches) {
-    for (int i = 0; i < num_matches; i++) {
-        free(matches[i]);
-    }
-    free(matches);
 }

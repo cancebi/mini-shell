@@ -11,6 +11,8 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <string.h>
+#include <ctype.h>
+
 
 int background = 0;
 
@@ -38,16 +40,14 @@ int execute_command(char *command) {
         while (*(ampersand - 1) == ' ') {
             *(--ampersand) = '\0'; 
         }
+    } else {
+        background = 0;
     }
 
-    if (pid < 0) {
-        perror("fork failed");
-        return 127;
-    }
-
-    int status;
+    pid_t pid = fork();
 
     if (pid == 0) {
+        
         handle_redirection(command);
 
         char *args[100];
@@ -99,23 +99,24 @@ int execute_command(char *command) {
             }
         }
     } else if (pid > 0) {
-
         if (background) {
-            add_job(pid, command);
+            add_job(pid, command); 
+            printf("[%d] %d\n", job_count, pid);
         } else {
+            int status;
             if (waitpid(pid, &status, 0) == -1) {
                 perror("waitpid failed");
-                return 127; 
+                return 127;
             }
             if (WIFEXITED(status)) {
                 return WEXITSTATUS(status);
             }
         }
-        return 127;
     } else {
         perror("fork failed");
+        return 127;
     }
-    return 127;
+    return 0;
 }
 
 
@@ -172,31 +173,37 @@ void substitute_variables(char *command) {
     while (*src) {
         if (*src == '$') {
             src++;
-            char var_name[64];
+            char var_name[64] = {0};
             char *var_start = var_name;
 
-            
-            while (*src && ((*src >= 'a' && *src <= 'z') || (*src >= 'A' && *src <= 'Z') || (*src >= '0' && *src <= '9') || *src == '_')) {
+            while (*src && isalnum(*src) && (var_start - var_name) < (int)sizeof(var_name) - 1) {
                 *var_start++ = *src++;
             }
             *var_start = '\0';
 
             char *value = get_variable_value(var_name);
             if (value) {
-                while (*value) {
-                    *dest++ = *value++;
+                size_t value_len = strlen(value);
+                size_t remaining_space = sizeof(buffer) - (dest - buffer) - 1;
+                if (value_len > remaining_space) {
+                    fprintf(stderr, "Variable substitution exceeds buffer size: $%s\n", var_name);
+                    return;
                 }
+                strncpy(dest, value, remaining_space);
+                dest += value_len;
             } else {
                 fprintf(stderr, "Variable not defined: $%s\n", var_name);
             }
         } else {
+            if ((dest - buffer) >= (int)sizeof(buffer) - 1) {
+                fprintf(stderr, "Buffer overflow detected during substitution.\n");
+                return;
+            }
             *dest++ = *src++;
         }
     }
     *dest = '\0';
 
-    
     strncpy(command, buffer, sizeof(buffer) - 1);
     command[sizeof(buffer) - 1] = '\0';
 }
-

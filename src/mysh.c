@@ -8,6 +8,7 @@
 #include "../include/parser.h"
 #include "../include/variable.h"
 #include "../include/myps.h"
+#include "../include/process_manager.h"
 
 
 #define ROUGE(x) "\033[31m" x "\033[0m"
@@ -19,8 +20,48 @@
 volatile sig_atomic_t foreground_running = 0;
 char last_command_name[MAX_COMMAND_LENGTH] = "";
 int last_status = -1;
+pid_t last_pid = -1;
 char current_directory[MAX_PATH_LENGTH];  
 char global_command_line[MAX_COMMAND_LENGTH];
+
+/**
+ * @brief Gère le signal SIGCHLD et affiche les informations des processus terminés.
+ */
+void handle_sigchld(int sig) {
+    int status;
+    pid_t pid;
+
+    while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+        for (int i = 0; i < job_count; i++) {
+            if (jobs[i].pid == pid) {
+                printf("[%d] %d terminé avec status=%d\n",
+                       jobs[i].job_id,
+                       pid,
+                       WIFEXITED(status) ? WEXITSTATUS(status) : -1);
+                remove_job(pid);
+                break;
+            }
+        }
+    }
+}
+
+/**
+ * @brief Gère le signal SIGTSTP pour arrêter un processus en avant-plan.
+ * 
+ * Si un processus en avant-plan est en cours, il est stoppé et ajouté à la liste des jobs.
+ * 
+ * @param sig Signal reçu (toujours SIGTSTP).
+ * 
+ */
+void handle_sigtstp(int sig) {
+    if (foreground_running) {
+        printf("\nCommande stoppée: %s\n", last_command_name);
+        add_job(last_pid, last_command_name);
+        jobs[job_count - 1].running = 0;
+        kill(last_pid, SIGTSTP);
+        foreground_running = 0;
+    }
+}
 
 
 /**
@@ -111,9 +152,11 @@ void run_shell() {
     int num_commands;
 
     signal(SIGINT, handle_sigint);
+    //signal(SIGCHLD, handle_sigchld);
+    //signal(SIGTSTP, handle_sigtstp);
 
     while (1) {
-        if(getcwd(current_directory, sizeof(current_directory)) == NULL) {
+        if (getcwd(current_directory, sizeof(current_directory)) == NULL) {
             perror("getcwd failed");
             strcpy(current_directory, "?"); 
         }
@@ -138,7 +181,7 @@ void run_shell() {
             continue;
         }
 
-        if(strncmp(global_command_line, "cd", 2) == 0 ){
+        if (strncmp(global_command_line, "cd", 2) == 0) {
             char *directory = strtok(global_command_line + 3, " ");
             last_status = change_directory(directory);
             strncpy(last_command_name, "cd", MAX_COMMAND_LENGTH);
@@ -154,7 +197,7 @@ void run_shell() {
             print_status();
             continue;
         }
-        
+
         if (strcmp(global_command_line, "myps") == 0) {
             myps();
             strncpy(last_command_name, "myps", MAX_COMMAND_LENGTH);
@@ -163,7 +206,7 @@ void run_shell() {
         }
 
         if (strcmp(global_command_line, "myjobs") == 0) {
-            execute_myjobs();
+            list_jobs();
             strncpy(last_command_name, "myjobs", MAX_COMMAND_LENGTH);
             last_status = 0;
             continue;
@@ -171,7 +214,7 @@ void run_shell() {
 
         if (strncmp(global_command_line, "myfg", 4) == 0) {
             int job_id = atoi(global_command_line + 5);
-            execute_myfg(job_id);
+            bring_job_to_foreground(job_id);
             strncpy(last_command_name, "myfg", MAX_COMMAND_LENGTH);
             last_status = 0;
             continue;
@@ -179,7 +222,7 @@ void run_shell() {
 
         if (strncmp(global_command_line, "mybg", 4) == 0) {
             int job_id = atoi(global_command_line + 5);
-            execute_mybg(job_id);
+            move_job_to_background(job_id);
             strncpy(last_command_name, "mybg", MAX_COMMAND_LENGTH);
             last_status = 0;
             continue;
@@ -243,7 +286,7 @@ void run_shell() {
             last_status = 0;
             continue;
         }
-
+        
         ParsedCommand *commands = parse_input(global_command_line, &num_commands);
 
         for (int i = 0; i < num_commands; i++) {
